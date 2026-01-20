@@ -59,7 +59,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         exit 1
     fi
     
-    brew install cmake openblas lapack
+    brew install cmake openblas lapack libomp
     
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Linux
@@ -104,7 +104,21 @@ CMAKE_ARGS=(
 # Add OpenBLAS path on macOS
 if [[ "$OSTYPE" == "darwin"* ]]; then
     OPENBLAS_PATH=$(brew --prefix openblas 2>/dev/null || echo "/usr/local")
-    CMAKE_ARGS+=(-DBLA_VENDOR=OpenBLAS -DBLAS_ROOT="$OPENBLAS_PATH")
+    OPENBLAS_LIB="${OPENBLAS_PATH}/lib/libopenblas.dylib"
+    CMAKE_ARGS+=(
+        -DBLA_VENDOR=OpenBLAS
+        -DBLAS_ROOT="$OPENBLAS_PATH"
+        -DBLAS_LIBRARIES="$OPENBLAS_LIB"
+        -DLAPACK_LIBRARIES="$OPENBLAS_LIB"
+    )
+    LIBOMP_PREFIX=$(brew --prefix libomp 2>/dev/null || echo "/usr/local/opt/libomp")
+    if [ -d "$LIBOMP_PREFIX" ]; then
+        CMAKE_ARGS+=(
+            -DOpenMP_CXX_FLAGS="-Xpreprocessor -fopenmp -I${LIBOMP_PREFIX}/include"
+            -DOpenMP_CXX_LIB_NAMES=omp
+            -DOpenMP_omp_LIBRARY="${LIBOMP_PREFIX}/lib/libomp.dylib"
+        )
+    fi
 fi
 
 echo "Running CMake with arguments: ${CMAKE_ARGS[@]}"

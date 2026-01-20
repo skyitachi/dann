@@ -231,3 +231,5 @@ node_data/
 vector_storage/
 index_cache/
 replication_logs/
+test_faiss
+test_faiss.cpp

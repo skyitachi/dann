@@ -35,11 +35,11 @@ message NodeInfo {
   string address = 2;
   int32 port = 3;
   bool is_active = 4;
-  int64_t last_heartbeat = 5;
+  int64 last_heartbeat = 5;
   repeated int32 shard_ids = 6;
   map<string, string> metadata = 7;
   string version = 8;
-  int64_t join_time = 9;
+  int64 join_time = 9;
 }
 
 // Join cluster request
@@ -70,7 +70,7 @@ message LeaveClusterResponse {
 // Heartbeat request
 message HeartbeatRequest {
   string node_id = 1;
-  int64_t timestamp = 2;
+  int64 timestamp = 2;
   map<string, string> status = 3;
 }
 
@@ -78,7 +78,7 @@ message HeartbeatRequest {
 message HeartbeatResponse {
   bool success = 1;
   string error_message = 2;
-  int64_t timestamp = 3;
+  int64 timestamp = 3;
 }
 
 // Get cluster nodes request
@@ -117,15 +117,15 @@ message GetShardInfoResponse {
   int32 shard_id = 3;
   string assigned_node = 4;
   repeated string replica_nodes = 5;
-  int64_t vector_count = 6;
-  int64_t size_bytes = 7;
+  int64 vector_count = 6;
+  int64 size_bytes = 7;
 }
 
 // Replicate data request
 message ReplicateDataRequest {
   repeated IndexOperation operations = 1;
   string source_node = 2;
-  int64_t version = 3;
+  int64 version = 3;
 }
 
 // Replicate data response
@@ -144,17 +144,17 @@ message IndexOperation {
   }
   
   OperationType type = 1;
-  int64_t vector_id = 2;
+  int64 vector_id = 2;
   repeated float vector_data = 3;
-  int64_t timestamp = 4;
-  int64_t version = 5;
+  int64 timestamp = 4;
+  int64 version = 5;
   map<string, string> metadata = 6;
 }
 
 // Sync data request
 message SyncDataRequest {
   int32 shard_id = 1;
-  int64_t from_version = 2;
+  int64 from_version = 2;
   string requesting_node = 3;
 }
 
@@ -163,5 +163,5 @@ message SyncDataResponse {
   bool success = 1;
   string error_message = 2;
   repeated IndexOperation operations = 3;
-  int64_t latest_version = 4;
+  int64 latest_version = 4;
 }

@@ -28,7 +28,7 @@ service VectorSearchService {
 
 // Basic vector data structure
 message Vector {
-  int64_t id = 1;
+  int64 id = 1;
   repeated float data = 2;
   map<string, string> metadata = 3;
 }
@@ -38,13 +38,13 @@ message SearchRequest {
   repeated float query_vector = 1;
   int32 k = 2;
   string consistency_level = 3;
-  int64_t timeout_ms = 4;
+  int64 timeout_ms = 4;
   map<string, string> filters = 5;
 }
 
 // Search result
 message SearchResult {
-  int64_t id = 1;
+  int64 id = 1;
   float distance = 2;
   repeated float vector = 3;
   map<string, string> metadata = 4;
@@ -55,7 +55,7 @@ message SearchResponse {
   bool success = 1;
   string error_message = 2;
   repeated SearchResult results = 3;
-  int64_t query_time_ms = 4;
+  int64 query_time_ms = 4;
 }
 
 // Add vectors request
@@ -69,14 +69,14 @@ message AddVectorsRequest {
 message AddVectorsResponse {
   bool success = 1;
   string error_message = 2;
-  int64_t added_count = 3;
-  int64_t load_time_ms = 4;
-  repeated int64_t failed_ids = 5;
+  int64 added_count = 3;
+  int64 load_time_ms = 4;
+  repeated int64 failed_ids = 5;
 }
 
 // Remove vector request
 message RemoveVectorRequest {
-  int64_t id = 1;
+  int64 id = 1;
 }
 
 // Remove vector response
@@ -87,7 +87,7 @@ message RemoveVectorResponse {
 
 // Update vector request
 message UpdateVectorRequest {
-  int64_t id = 1;
+  int64 id = 1;
   repeated float vector = 2;
   map<string, string> metadata = 3;
 }
@@ -100,7 +100,7 @@ message UpdateVectorResponse {
 
 // Get vector request
 message GetVectorRequest {
-  int64_t id = 1;
+  int64 id = 1;
 }
 
 // Get vector response
@@ -119,12 +119,12 @@ message StatsRequest {
 message StatsResponse {
   bool success = 1;
   string error_message = 2;
-  int64_t total_vectors = 3;
-  int64_t index_size_bytes = 4;
+  int64 total_vectors = 3;
+  int64 index_size_bytes = 4;
   string index_type = 5;
   int32 dimension = 6;
   double avg_query_time_ms = 7;
-  int64_t total_queries = 8;
+  int64 total_queries = 8;
   map<string, double> custom_metrics = 9;
 }
 
@@ -138,6 +138,6 @@ message HealthCheckResponse {
   bool healthy = 1;
   string status = 2;
   string version = 3;
-  int64_t uptime_seconds = 4;
+  int64 uptime_seconds = 4;
   map<string, string> details = 5;
 }
