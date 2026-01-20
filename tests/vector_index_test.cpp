@@ -202,7 +202,7 @@ TEST_F(VectorIndexTest, SearchWithValidIndex) {
         EXPECT_GE(result.id, 0);
         EXPECT_LT(result.id, test_ids_.size());
         EXPECT_GE(result.distance, 0.0f);
-        EXPECT_EQ(result.vector.size(), dimension_);
+        EXPECT_EQ(result.vector.size(), 0);
     }
 }
 

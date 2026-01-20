@@ -42,7 +42,7 @@ bool VectorIndex::add_vectors(const std::vector<float>& vectors, const std::vect
                             std::chrono::system_clock::now().time_since_epoch())
                             .count();
     for (size_t i = 0; i < num_vectors; ++i) {
-        pending_operations_.push_back(IndexOperation(IndexOperation::ADD, ids[i], now_ms, version_.load()));
+        pending_operations_.emplace_back(IndexOperation::ADD, ids[i], now_ms, version_.load());
     }
     ++version_;
     return true;
@@ -83,6 +83,12 @@ bool VectorIndex::add_vectors_bulk(const std::vector<float>& vectors,
     return true;
 }
 
+/**
+ * never return origin vector data
+ * @param query - query vector
+ * @param k
+ * @return
+ */
 std::vector<SearchResult> VectorIndex::search(const std::vector<float>& query, int k) {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<SearchResult> results;
