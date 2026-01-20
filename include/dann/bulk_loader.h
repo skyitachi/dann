@@ -13,6 +13,10 @@
 
 namespace dann {
 
+// Forward declarations
+class VectorIndex;
+class ConsistencyManager;
+
 class BulkLoader {
 public:
     BulkLoader(std::shared_ptr<VectorIndex> index, 

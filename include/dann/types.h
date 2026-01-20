@@ -25,6 +25,9 @@ struct IndexOperation {
     uint64_t timestamp;
     uint64_t version;
     
+    IndexOperation() : type(ADD), id(0), vector(), timestamp(0), version(0) {}
+    IndexOperation(Type t, int64_t i, uint64_t ts, uint64_t ver)
+        : type(t), id(i), vector(), timestamp(ts), version(ver) {}
     IndexOperation(Type t, int64_t i, const std::vector<float>& v, uint64_t ts, uint64_t ver)
         : type(t), id(i), vector(v), timestamp(ts), version(ver) {}
 };
@@ -37,6 +40,7 @@ struct NodeInfo {
     uint64_t last_heartbeat;
     std::vector<int> shard_ids;
     
+    NodeInfo() : node_id(""), address(""), port(0), is_active(false), last_heartbeat(0) {}
     NodeInfo(const std::string& id, const std::string& addr, int p)
         : node_id(id), address(addr), port(p), is_active(false), last_heartbeat(0) {}
 };

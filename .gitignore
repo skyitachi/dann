@@ -29,6 +29,7 @@ third_party/protobuf/
 third_party/grpc/
 third_party/hiredis/
 third_party/spdlog/
+third_party/gtest/
 
 # Generated files
 src/generated/

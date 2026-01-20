@@ -12,6 +12,9 @@
 
 namespace dann {
 
+// Forward declaration
+class NodeManager;
+
 class QueryRouter {
 public:
     QueryRouter(std::shared_ptr<NodeManager> node_manager);

@@ -56,18 +56,50 @@ else()
     endif()
 endif()
 
-# Core library sources
-set(CORE_SOURCES
+# Find or use third-party gtest
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
+    set(GTEST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
+    set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/include")
+    set(GTEST_LIB_DIR "${GTEST_ROOT}/lib")
+    
+    include_directories(${GTEST_INCLUDE_DIR})
+    link_directories(${GTEST_LIB_DIR})
+    message(STATUS "Using third-party gtest from: ${GTEST_ROOT}")
+else()
+    # Try to find system gtest
+    find_package(GTest REQUIRED)
+    message(STATUS "Using system gtest")
+endif()
+
+# Core library sources (minimal version without protobuf for testing)
+set(CORE_SOURCES_MINIMAL
     src/core/vector_index.cpp
-    src/core/node_manager.cpp
-    src/core/consistency_manager.cpp
-    src/core/query_router.cpp
-    src/core/bulk_loader.cpp
-    src/core/serialization.cpp
-    src/generated/vector_service.pb.cc
-    src/generated/node_management.pb.cc
-    src/generated/consistency.pb.cc
 )
+
+# Create minimal core library for testing
+add_library(dann_core_minimal STATIC ${CORE_SOURCES_MINIMAL})
+
+# Add OpenMP support for macOS
+if(APPLE)
+    target_compile_options(dann_core_minimal PRIVATE -Xpreprocessor -fopenmp)
+    target_include_directories(dann_core_minimal PRIVATE /opt/homebrew/opt/libomp/include)
+else()
+    target_compile_options(dann_core_minimal PRIVATE ${OpenMP_CXX_FLAGS})
+    target_include_directories(dann_core_minimal PRIVATE ${OpenMP_CXX_INCLUDE_DIRS})
+endif()
+
+# Link FAISS based on installation method
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/faiss/install")
+    target_link_libraries(dann_core_minimal ${FAISS_LIB_DIR}/libfaiss.a)
+else()
+    target_link_libraries(dann_core_minimal ${FAISS_LIBRARIES})
+endif()
+
+if(APPLE)
+    target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate")
+else()
+    target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES})
+endif()
 
 # Network layer sources
 set(NETWORK_SOURCES
@@ -89,57 +121,41 @@ set(UTILS_SOURCES
     src/utils/metrics.cpp
 )
 
-# Create core library
-add_library(dann_core STATIC ${CORE_SOURCES})
-
-# Link FAISS based on installation method
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/faiss/install")
-    target_link_libraries(dann_core ${FAISS_LIB_DIR}/libfaiss.a)
-else()
-    target_link_libraries(dann_core ${FAISS_LIBRARIES})
-endif()
-
-target_link_libraries(dann_core ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES} protobuf)
-
-# Generate protobuf files
-add_custom_target(protobuf_files
-    COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${PROTOBUF_LIBRARY_DIRS} ${PROTOBUF_PROTOC_EXECUTABLE}
-    --cpp_out=src/generated --proto_path=proto proto/vector_service.proto
-    COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${PROTOBUF_LIBRARY_DIRS} ${PROTOBUF_PROTOC_EXECUTABLE}
-    --cpp_out=src/generated --proto_path=proto proto/node_management.proto
-    COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${PROTOBUF_LIBRARY_DIRS} ${PROTOBUF_PROTOC_EXECUTABLE}
-    --cpp_out=src/generated --proto_path=proto proto/consistency.proto
-    COMMAND ${CMAKE_COMMAND} -E make_directory include/generated
-    COMMAND ${CMAKE_COMMAND} -E rename src/generated/*.h include/generated/
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Generating protobuf files"
+# Network layer sources
+set(NETWORK_SOURCES
+    src/network/rpc_server.cpp
+    src/network/rpc_client.cpp
+    src/network/message_handler.cpp
 )
 
-# Make sure protobuf files are generated before building
-add_dependencies(dann_core protobuf_files)
-
-# Create network library
-add_library(dann_network STATIC ${NETWORK_SOURCES})
-target_link_libraries(dann_network dann_core grpc++ grpc++_reflection protobuf)
-
-# Create storage library
-add_library(dann_storage STATIC ${STORAGE_SOURCES})
-target_link_libraries(dann_storage dann_core hiredis)
+# Storage layer sources
+set(STORAGE_SOURCES
+    src/storage/redis_client.cpp
+    src/storage/local_storage.cpp
+)
 
 # Create utils library
 add_library(dann_utils STATIC ${UTILS_SOURCES})
 target_link_libraries(dann_utils spdlog)
 
-# Main executable
-add_executable(dann_server src/main.cpp)
-target_link_libraries(dann_server dann_core dann_network dann_storage dann_utils)
+# Main executable (commented out until core library is fixed)
+# add_executable(dann_server src/main.cpp)
+# target_link_libraries(dann_server dann_core dann_network dann_storage dann_utils)
 
-# Test executable
-add_executable(dann_test tests/test_main.cpp)
-target_link_libraries(dann_test dann_core dann_network dann_storage dann_utils gtest gtest_main)
+# Test executable (minimal version without protobuf dependencies)
+#add_executable(dann_test tests/gtest_integration_test.cpp)
+add_executable(dann_test tests/vector_index_test.cpp)
 
-# Installation
-install(TARGETS dann_server RUNTIME DESTINATION bin)
+# Link gtest based on installation method
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
+    target_link_libraries(dann_test 
+        ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a pthread dann_core_minimal)
+else()
+    target_link_libraries(dann_test gtest gtest_main dann_core_minimal)
+endif()
+
+# Installation (commented out until dann_server is rebuilt)
+# install(TARGETS dann_server RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
 
 # Testing

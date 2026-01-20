@@ -8,6 +8,7 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <thread>
 
 namespace dann {
 
@@ -124,8 +125,10 @@ private:
         std::vector<double> histogram_values;
         std::unordered_map<std::string, std::string> labels;
         uint64_t last_updated;
+        uint64_t timestamp_ms;
         
-        MetricData(MetricType t) : type(t), value(0.0), last_updated(0) {}
+        MetricData() : type(MetricType::COUNTER), value(0.0), last_updated(0), timestamp_ms(0) {}
+        MetricData(MetricType t) : type(t), value(0.0), last_updated(0), timestamp_ms(0) {}
     };
     
     mutable std::mutex metrics_mutex_;

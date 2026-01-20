@@ -14,7 +14,10 @@ namespace dann {
 
 class VectorIndex {
 public:
-    VectorIndex(int dimension, const std::string& index_type = "IVF");
+    VectorIndex(int dimension,
+                const std::string& index_type = "IVF",
+                int hnsw_m = 16,
+                int hnsw_ef_construction = 100);
     ~VectorIndex();
     
     // Core operations
@@ -47,6 +50,8 @@ private:
     std::unique_ptr<faiss::Index> index_;
     int dimension_;
     std::string index_type_;
+    int hnsw_m_;
+    int hnsw_ef_construction_;
     mutable std::mutex mutex_;
     std::atomic<uint64_t> version_;
     std::vector<IndexOperation> pending_operations_;

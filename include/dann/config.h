@@ -171,6 +171,9 @@ private:
     std::string expand_env_var(const std::string& value) const;
     bool is_env_var(const std::string& str) const;
     std::string extract_env_var_name(const std::string& str) const;
+    
+    // Initialize default configurations
+    void set_default_configurations();
 };
 
 // Convenience macros for accessing configuration
