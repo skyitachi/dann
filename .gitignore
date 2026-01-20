@@ -1,0 +1,233 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# Compiled binaries
+*.exe
+*.out
+*.app
+dann_server
+dann_test
+*.bin
+
+# Object files
+*.o
+*.obj
+*.lo
+
+# Static and shared libraries
+*.a
+*.so
+*.dylib
+*.dll
+*.lib
+
+# Dependency directories
+third_party/faiss/
+third_party/protobuf/
+third_party/grpc/
+third_party/hiredis/
+third_party/spdlog/
+
+# Generated files
+src/generated/
+include/generated/
+*.pb.cc
+*.pb.h
+*_pb2.py
+*_pb2_grpc.py
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.vs/
+*.vcxproj*
+*.sln
+
+# Logs
+*.log
+logs/
+*.trace
+
+# Data files
+data/
+*.idx
+*.dat
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache and temporary files
+.cache/
+tmp/
+temp/
+*.tmp
+*.temp
+*.cache
+
+# Test files
+test_data/
+test_vectors/
+*.test
+
+# Configuration files with secrets
+config/local.json
+config/production.json
+.env
+.env.local
+.env.*.local
+
+# Profiling and coverage
+*.prof
+*.gcov
+*.gcda
+*.gcno
+coverage/
+htmlcov/
+
+# Documentation build
+docs/_build/
+docs/build/
+*.dox
+
+# Package files
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+*.dmg
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Core dumps
+core
+core.*
+*.stackdump
+
+# Python files (if any)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter notebooks
+.ipynb_checkpoints
+
+# PyTorch
+*.pth
+*.pt
+
+# TensorFlow
+*.ckpt
+*.pb
+
+# Docker
+.dockerignore
+
+# Kubernetes
+*.kubeconfig
+
+# Local development
+.local/
+local/
+dev/
+development/
+
+# Performance data
+perf.data
+*.perf
+metrics/
+monitoring/
+
+# Security
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+private/
+
+# Large files (avoid committing)
+*.hdf5
+*.h5
+*.parquet
+*.feather
+large_datasets/
+
+# Model files
+models/
+*.model
+*.onnx
+*.tflite
+
+# Benchmark results
+benchmarks/
+results/
+*.benchmark
+
+# Experimental features
+experimental/
+sandbox/
+playground/
+
+# Vendor dependencies (if not committed)
+vendor/
+external/
+
+# Package manager files
+package-lock.json
+yarn.lock
+Gemfile.lock
+Pipfile.lock
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.vim
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Project specific
+cluster_state/
+node_data/
+vector_storage/
+index_cache/
+replication_logs/

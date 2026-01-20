@@ -1,0 +1,143 @@
+syntax = "proto3";
+
+package dann;
+
+// Vector search service definition
+service VectorSearchService {
+  // Search for similar vectors
+  rpc Search(SearchRequest) returns (SearchResponse);
+  
+  // Add vectors to index
+  rpc AddVectors(AddVectorsRequest) returns (AddVectorsResponse);
+  
+  // Remove vector by ID
+  rpc RemoveVector(RemoveVectorRequest) returns (RemoveVectorResponse);
+  
+  // Update existing vector
+  rpc UpdateVector(UpdateVectorRequest) returns (UpdateVectorResponse);
+  
+  // Get vector by ID
+  rpc GetVector(GetVectorRequest) returns (GetVectorResponse);
+  
+  // Get index statistics
+  rpc GetStats(StatsRequest) returns (StatsResponse);
+  
+  // Health check
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Basic vector data structure
+message Vector {
+  int64_t id = 1;
+  repeated float data = 2;
+  map<string, string> metadata = 3;
+}
+
+// Search request
+message SearchRequest {
+  repeated float query_vector = 1;
+  int32 k = 2;
+  string consistency_level = 3;
+  int64_t timeout_ms = 4;
+  map<string, string> filters = 5;
+}
+
+// Search result
+message SearchResult {
+  int64_t id = 1;
+  float distance = 2;
+  repeated float vector = 3;
+  map<string, string> metadata = 4;
+}
+
+// Search response
+message SearchResponse {
+  bool success = 1;
+  string error_message = 2;
+  repeated SearchResult results = 3;
+  int64_t query_time_ms = 4;
+}
+
+// Add vectors request
+message AddVectorsRequest {
+  repeated Vector vectors = 1;
+  bool overwrite_existing = 2;
+  int32 batch_size = 3;
+}
+
+// Add vectors response
+message AddVectorsResponse {
+  bool success = 1;
+  string error_message = 2;
+  int64_t added_count = 3;
+  int64_t load_time_ms = 4;
+  repeated int64_t failed_ids = 5;
+}
+
+// Remove vector request
+message RemoveVectorRequest {
+  int64_t id = 1;
+}
+
+// Remove vector response
+message RemoveVectorResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+// Update vector request
+message UpdateVectorRequest {
+  int64_t id = 1;
+  repeated float vector = 2;
+  map<string, string> metadata = 3;
+}
+
+// Update vector response
+message UpdateVectorResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+// Get vector request
+message GetVectorRequest {
+  int64_t id = 1;
+}
+
+// Get vector response
+message GetVectorResponse {
+  bool success = 1;
+  string error_message = 2;
+  Vector vector = 3;
+}
+
+// Stats request
+message StatsRequest {
+  // Empty request
+}
+
+// Stats response
+message StatsResponse {
+  bool success = 1;
+  string error_message = 2;
+  int64_t total_vectors = 3;
+  int64_t index_size_bytes = 4;
+  string index_type = 5;
+  int32 dimension = 6;
+  double avg_query_time_ms = 7;
+  int64_t total_queries = 8;
+  map<string, double> custom_metrics = 9;
+}
+
+// Health check request
+message HealthCheckRequest {
+  // Empty request
+}
+
+// Health check response
+message HealthCheckResponse {
+  bool healthy = 1;
+  string status = 2;
+  string version = 3;
+  int64_t uptime_seconds = 4;
+  map<string, string> details = 5;
+}

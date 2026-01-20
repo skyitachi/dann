@@ -1,0 +1,79 @@
+#pragma once
+
+#include <grpc++/grpc++.h>
+#include <memory>
+#include <string>
+#include <functional>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include "dann/types.h"
+
+namespace dann {
+
+// RPC service definitions (simplified)
+class VectorSearchService {
+public:
+    virtual ~VectorSearchService() = default;
+    virtual QueryResponse Search(const QueryRequest& request) = 0;
+    virtual bool AddVectors(const BulkLoadRequest& request) = 0;
+    virtual bool RemoveVector(int64_t id) = 0;
+    virtual bool UpdateVector(int64_t id, const std::vector<float>& vector) = 0;
+};
+
+class RPCServer {
+public:
+    RPCServer(const std::string& address, int port);
+    ~RPCServer();
+    
+    // Server lifecycle
+    bool start();
+    bool stop();
+    bool is_running() const;
+    
+    // Service registration
+    void register_service(std::shared_ptr<VectorSearchService> service);
+    
+    // Configuration
+    void set_max_threads(int max_threads);
+    void set_timeout_ms(int timeout_ms);
+    
+    // Metrics
+    struct ServerMetrics {
+        uint64_t total_requests;
+        uint64_t successful_requests;
+        uint64_t failed_requests;
+        double avg_response_time_ms;
+        uint64_t active_connections;
+    };
+    
+    ServerMetrics get_metrics() const;
+    void reset_metrics();
+    
+private:
+    std::string address_;
+    int port_;
+    std::atomic<bool> running_;
+    int max_threads_;
+    int timeout_ms_;
+    
+    std::unique_ptr<grpc::Server> server_;
+    std::shared_ptr<VectorSearchService> search_service_;
+    
+    mutable std::mutex metrics_mutex_;
+    ServerMetrics metrics_;
+    
+    std::vector<std::thread> worker_threads_;
+    
+    // Server implementation
+    void setup_grpc_server();
+    void handle_request(const std::string& method, const std::string& request_data);
+    void update_metrics(bool success, double response_time);
+    
+    // Worker threads
+    void worker_loop();
+    void start_worker_threads();
+    void stop_worker_threads();
+};
+
+} // namespace dann
