@@ -5,7 +5,7 @@
 set -e
 
 FAISS_VERSION="1.7.4"
-INSTALL_DIR="$(pwd)/faiss"
+INSTALL_DIR="$(pwd)/third_party/faiss"
 BUILD_TYPE="Release"
 ENABLE_GPU="OFF"
 
@@ -164,18 +164,6 @@ echo ""
 # Test installation
 echo "Testing FAISS installation..."
 cd ../../
-
-# Create a simple test
-cat > test_faiss.cpp << 'EOF'
-#include <faiss/Index.h>
-#include <iostream>
-
-int main() {
-    std::cout << "FAISS version: " << faiss::version() << std::endl;
-    std::cout << "FAISS installation test: PASSED" << std::endl;
-    return 0;
-}
-EOF
 
 # Compile test
 g++ -std=c++11 -I"$INSTALL_DIR/install/include" test_faiss.cpp -L"$INSTALL_DIR/install/lib" -lfaiss -o test_faiss
