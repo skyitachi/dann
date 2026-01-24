@@ -8,18 +8,13 @@
 #include <atomic>
 #include <mutex>
 #include "dann/types.h"
+#include "vector_service.pb.h"
+#include "vector_service.grpc.pb.h"
 
 namespace dann {
 
-// RPC service definitions (simplified)
-class VectorSearchService {
-public:
-    virtual ~VectorSearchService() = default;
-    virtual QueryResponse Search(const QueryRequest& request) = 0;
-    virtual bool AddVectors(const BulkLoadRequest& request) = 0;
-    virtual bool RemoveVector(int64_t id) = 0;
-    virtual bool UpdateVector(int64_t id, const std::vector<float>& vector) = 0;
-};
+// Forward declaration
+class VectorSearchServiceImpl;
 
 class RPCServer {
 public:
@@ -32,7 +27,7 @@ public:
     bool is_running() const;
     
     // Service registration
-    void register_service(std::shared_ptr<VectorSearchService> service);
+    void register_service(std::unique_ptr<VectorSearchService> service);
     
     // Configuration
     void set_max_threads(int max_threads);
@@ -58,7 +53,7 @@ private:
     int timeout_ms_;
     
     std::unique_ptr<grpc::Server> server_;
-    std::shared_ptr<VectorSearchService> search_service_;
+    std::unique_ptr<VectorSearchService> search_service_;
     
     mutable std::mutex metrics_mutex_;
     ServerMetrics metrics_;

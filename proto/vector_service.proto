@@ -138,6 +138,7 @@ message HealthCheckResponse {
   bool healthy = 1;
   string status = 2;
   string version = 3;
-  int64 uptime_seconds = 4;
-  map<string, string> details = 5;
+  string error_message = 4;
+  int64 uptime_seconds = 5;
+  map<string, string> details = 6;
 }

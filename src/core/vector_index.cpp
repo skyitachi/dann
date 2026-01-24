@@ -42,7 +42,7 @@ bool VectorIndex::add_vectors(const std::vector<float>& vectors, const std::vect
                             std::chrono::system_clock::now().time_since_epoch())
                             .count();
     for (size_t i = 0; i < num_vectors; ++i) {
-        pending_operations_.emplace_back(IndexOperation::ADD, ids[i], now_ms, version_.load());
+        pending_operations_.emplace_back(InternalIndexOperation::ADD, ids[i], now_ms, version_.load());
     }
     ++version_;
     return true;
@@ -89,9 +89,9 @@ bool VectorIndex::add_vectors_bulk(const std::vector<float>& vectors,
  * @param k
  * @return
  */
-std::vector<SearchResult> VectorIndex::search(const std::vector<float>& query, int k) {
+std::vector<InternalSearchResult> VectorIndex::search(const std::vector<float>& query, int k) {
     std::lock_guard<std::mutex> lock(mutex_);
-    std::vector<SearchResult> results;
+    std::vector<InternalSearchResult> results;
     if (!validate_vectors(query) || k <= 0 || size() == 0) {
         return results;
     }
@@ -109,9 +109,9 @@ std::vector<SearchResult> VectorIndex::search(const std::vector<float>& query, i
     return results;
 }
 
-std::vector<SearchResult> VectorIndex::search_batch(const std::vector<float>& queries, int k) {
+std::vector<InternalSearchResult> VectorIndex::search_batch(const std::vector<float>& queries, int k) {
     std::lock_guard<std::mutex> lock(mutex_);
-    std::vector<SearchResult> results;
+    std::vector<InternalSearchResult> results;
     if (!validate_vectors(queries) || k <= 0 || size() == 0) {
         return results;
     }
@@ -143,7 +143,7 @@ bool VectorIndex::remove_vector(int64_t id) {
         const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                 std::chrono::system_clock::now().time_since_epoch())
                                 .count();
-        pending_operations_.push_back(IndexOperation(IndexOperation::DELETE, id, now_ms, version_.load()));
+        pending_operations_.push_back(InternalIndexOperation(InternalIndexOperation::DELETE, id, now_ms, version_.load()));
         ++version_;
         return true;
     }
@@ -209,7 +209,7 @@ void VectorIndex::set_version(uint64_t version) {
     version_.store(version);
 }
 
-std::vector<IndexOperation> VectorIndex::get_pending_operations() {
+std::vector<InternalIndexOperation> VectorIndex::get_pending_operations() {
     std::lock_guard<std::mutex> lock(mutex_);
     return pending_operations_;
 }
@@ -235,8 +235,8 @@ bool VectorIndex::validate_vectors(const std::vector<float>& vectors) {
     return !vectors.empty() && (vectors.size() % static_cast<size_t>(dimension_) == 0);
 }
 
-SearchResult VectorIndex::create_search_result(int64_t id, float distance) const {
-    return SearchResult(id, distance, {});
+InternalSearchResult VectorIndex::create_search_result(int64_t id, float distance) const {
+    return InternalSearchResult(id, distance, {});
 }
 
 } // namespace dann

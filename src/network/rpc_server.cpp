@@ -1,4 +1,7 @@
 #include "dann/rpc_server.h"
+#include "vector_search_service_impl.h"
+#include "vector_service.grpc.pb.h"
+#include "vector_service.pb.h"
 #include <grpc++/server_builder.h>
 #include <grpc++/server_context.h>
 #include <chrono>
@@ -58,8 +61,8 @@ bool RPCServer::is_running() const {
     return running_.load();
 }
 
-void RPCServer::register_service(std::shared_ptr<VectorSearchService> service) {
-    search_service_ = service;
+void RPCServer::register_service(std::unique_ptr<VectorSearchService> service) {
+    search_service_ = std::move(service);
 }
 
 void RPCServer::set_max_threads(int max_threads) {
@@ -98,6 +101,14 @@ void RPCServer::setup_grpc_server() {
     
     // Set max threads
     builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_threads_);
+    
+    // Register the service if available
+    if (search_service_) {
+        // Cast to the actual implementation and register
+        // auto* service_impl = static_cast<VectorSearchServiceImpl*>(search_service_.get());
+        VectorSearchService* raw = search_service_.get();
+        builder.RegisterService(search_service_.get());
+    }
     
     // Build and start server
     server_ = builder.BuildAndStart();
