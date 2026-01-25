@@ -61,7 +61,7 @@ bool RPCServer::is_running() const {
     return running_.load();
 }
 
-void RPCServer::register_service(std::unique_ptr<VectorSearchService> service) {
+void RPCServer::register_service(std::unique_ptr<VectorSearchServiceImpl> service) {
     search_service_ = std::move(service);
 }
 
@@ -105,9 +105,8 @@ void RPCServer::setup_grpc_server() {
     // Register the service if available
     if (search_service_) {
         // Cast to the actual implementation and register
-        // auto* service_impl = static_cast<VectorSearchServiceImpl*>(search_service_.get());
-        VectorSearchService* raw = search_service_.get();
-        builder.RegisterService(search_service_.get());
+        auto* service_impl = static_cast<VectorSearchServiceImpl*>(search_service_.get());
+        builder.RegisterService(service_impl);
     }
     
     // Build and start server

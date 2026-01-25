@@ -27,7 +27,7 @@ public:
     bool is_running() const;
     
     // Service registration
-    void register_service(std::unique_ptr<VectorSearchService> service);
+    void register_service(std::unique_ptr<VectorSearchServiceImpl> service);
     
     // Configuration
     void set_max_threads(int max_threads);
@@ -53,7 +53,7 @@ private:
     int timeout_ms_;
     
     std::unique_ptr<grpc::Server> server_;
-    std::unique_ptr<VectorSearchService> search_service_;
+    std::unique_ptr<VectorSearchServiceImpl> search_service_;
     
     mutable std::mutex metrics_mutex_;
     ServerMetrics metrics_;

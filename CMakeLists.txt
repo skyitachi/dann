@@ -110,7 +110,7 @@ endif()
 # Network layer sources
 set(NETWORK_SOURCES
     src/network/rpc_server.cpp
-    src/network/rpc_client.cpp
+#    src/network/rpc_client.cpp
 #    src/network/message_handler.cpp
     src/network/vector_search_service_impl.h
     src/network/vector_search_service_impl.cpp
@@ -222,6 +222,7 @@ if(Protobuf_FOUND AND gRPC_FOUND)
                 gRPC::grpc++
         )
         target_include_directories(myproto PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/proto)
+        target_include_directories(myproto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
         get_target_property(grpc_cpp_plugin_location gRPC::grpc_cpp_plugin LOCATION)
         protobuf_generate(TARGET myproto LANGUAGE cpp)
         protobuf_generate(TARGET myproto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}")
@@ -346,3 +347,39 @@ install(DIRECTORY include/ DESTINATION include)
 # Testing
 enable_testing()
 add_test(NAME DANNTests COMMAND dann_test)
+
+# gRPC test client
+if(Protobuf_FOUND AND gRPC_FOUND)
+    add_executable(test_grpc_client test_grpc_client.cpp)
+    target_link_libraries(test_grpc_client
+        PRIVATE
+            myproto
+    )
+    
+    # Link gRPC libraries based on how they were found
+    if(GRPC_FOUND_SYSTEM)
+        target_link_libraries(test_grpc_client
+            PRIVATE
+                gRPC::grpc++
+                protobuf::libprotobuf
+        )
+    elseif(GRPC_FOUND_PKGCONFIG)
+        target_link_libraries(test_grpc_client
+            PRIVATE
+                ${GRPC_LIBRARIES}
+                ${PROTOBUF_LIBRARIES}
+        )
+    else()
+        # Third-party gRPC
+        target_link_libraries(test_grpc_client
+            PRIVATE
+                ${GRPC_ROOT}/lib/libgrpc++.a
+                ${GRPC_ROOT}/lib/libgrpc.a
+                ${GRPC_ROOT}/lib/libgpr.a
+                ${GRPC_ROOT}/lib/libprotobuf.a
+        )
+    endif()
+    
+    # Add thread support
+    target_link_libraries(test_grpc_client PRIVATE pthread)
+endif()

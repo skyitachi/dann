@@ -1,8 +1,4 @@
 #include "dann/vector_index.h"
-#include "dann/node_manager.h"
-#include "dann/consistency_manager.h"
-#include "dann/query_router.h"
-#include "dann/bulk_loader.h"
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -115,8 +111,8 @@ void run_demo(const Config& config) {
 #ifdef HAVE_GRPC
     // Create and start gRPC server
     auto rpc_server = std::make_shared<RPCServer>(config.address, config.grpc_port);
-    auto search_service = std::make_shared<VectorSearchServiceImpl>(vector_index);
-    rpc_server->register_service(search_service);
+    auto search_service = std::make_unique<VectorSearchServiceImpl>(vector_index);
+    rpc_server->register_service(std::move(search_service));
     rpc_server->set_max_threads(8);
     
     if (!rpc_server->start()) {

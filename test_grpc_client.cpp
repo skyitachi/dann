@@ -1,5 +1,6 @@
 #include <grpc++/grpc++.h>
-#include "dann/vector_service.grpc.pb.h"
+#include "vector_service.grpc.pb.h"
+#include "vector_service.pb.h"
 #include <iostream>
 #include <vector>
 #include <random>
@@ -152,43 +153,43 @@ int main(int argc, char** argv) {
     std::cout << "\n=== Health Check ===" << std::endl;
     client.HealthCheck();
     
-    // Get initial stats
-    std::cout << "\n=== Initial Stats ===" << std::endl;
-    client.GetStats();
-    
-    // Add some test vectors
-    std::cout << "\n=== Adding Test Vectors ===" << std::endl;
-    const int dimension = 128;
-    const int num_vectors = 1000;
-    
-    std::vector<std::vector<float>> vectors;
-    std::vector<int64_t> ids;
-    
-    for (int i = 0; i < num_vectors; ++i) {
-        vectors.push_back(generate_random_vector(dimension));
-        ids.push_back(i);
-    }
-    
-    if (!client.AddVectors(vectors, ids)) {
-        std::cerr << "Failed to add vectors" << std::endl;
-        return 1;
-    }
-    
-    // Get stats after adding vectors
-    std::cout << "\n=== Stats After Adding Vectors ===" << std::endl;
-    client.GetStats();
-    
-    // Perform some test searches
-    std::cout << "\n=== Test Searches ===" << std::endl;
-    for (int i = 0; i < 5; ++i) {
-        std::cout << "\nSearch " << (i+1) << ":" << std::endl;
-        auto query_vector = generate_random_vector(dimension);
-        client.Search(query_vector, 10);
-    }
-    
-    // Final stats
-    std::cout << "\n=== Final Stats ===" << std::endl;
-    client.GetStats();
+    // // Get initial stats
+    // std::cout << "\n=== Initial Stats ===" << std::endl;
+    // client.GetStats();
+    //
+    // // Add some test vectors
+    // std::cout << "\n=== Adding Test Vectors ===" << std::endl;
+    // const int dimension = 128;
+    // const int num_vectors = 1000;
+    //
+    // std::vector<std::vector<float>> vectors;
+    // std::vector<int64_t> ids;
+    //
+    // for (int i = 0; i < num_vectors; ++i) {
+    //     vectors.push_back(generate_random_vector(dimension));
+    //     ids.push_back(i);
+    // }
+    //
+    // if (!client.AddVectors(vectors, ids)) {
+    //     std::cerr << "Failed to add vectors" << std::endl;
+    //     return 1;
+    // }
+    //
+    // // Get stats after adding vectors
+    // std::cout << "\n=== Stats After Adding Vectors ===" << std::endl;
+    // client.GetStats();
+    //
+    // // Perform some test searches
+    // std::cout << "\n=== Test Searches ===" << std::endl;
+    // for (int i = 0; i < 5; ++i) {
+    //     std::cout << "\nSearch " << (i+1) << ":" << std::endl;
+    //     auto query_vector = generate_random_vector(dimension);
+    //     client.Search(query_vector, 10);
+    // }
+    //
+    // // Final stats
+    // std::cout << "\n=== Final Stats ===" << std::endl;
+    // client.GetStats();
     
     return 0;
 }
