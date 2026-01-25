@@ -101,6 +101,13 @@ else()
     target_link_libraries(dann_core_minimal ${FAISS_LIBRARIES})
 endif()
 
+# Add BLAS/LAPACK for Linux systems
+if(UNIX AND NOT APPLE)
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+    target_link_libraries(dann_core_minimal ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+endif()
+
 if(APPLE)
     target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate")
 else()
