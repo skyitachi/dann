@@ -1,10 +1,13 @@
-#include <grpc++/grpc++.h>
+#include <grpcpp/grpcpp.h>
 #include "vector_service.grpc.pb.h"
 #include "vector_service.pb.h"
 #include <iostream>
 #include <vector>
 #include <random>
 #include <chrono>
+#include <stdexcept>
+#include <string>
+#include <H5Cpp.h>
 
 using namespace grpc;
 using namespace dann;
@@ -137,6 +140,71 @@ std::vector<float> generate_random_vector(int dimension) {
     return vector;
 }
 
+static H5::DataSet open_first_existing_dataset(H5::H5File& file, const std::vector<std::string>& candidates, std::string& chosen_name) {
+    for (const auto& name : candidates) {
+        try {
+            auto ds = file.openDataSet(name);
+            chosen_name = name;
+            return ds;
+        } catch (const H5::Exception&) {
+        }
+    }
+    throw std::runtime_error("No candidate dataset found in HDF5 file");
+}
+
+static std::vector<std::vector<float>> read_first_n_vectors_hdf5(
+    const std::string& hdf5_path,
+    int n,
+    int& out_dim,
+    std::string& out_dataset_name
+) {
+    H5::Exception::dontPrint();
+    H5::H5File file(hdf5_path, H5F_ACC_RDONLY);
+
+    std::string dataset_name;
+    H5::DataSet dataset = open_first_existing_dataset(
+        file,
+        {"test", "query", "queries"},
+        dataset_name
+    );
+
+    H5::DataSpace space = dataset.getSpace();
+    if (space.getSimpleExtentNdims() != 2) {
+        throw std::runtime_error("Expected 2D dataset for vectors");
+    }
+
+    hsize_t dims[2];
+    space.getSimpleExtentDims(dims, nullptr);
+    const int64_t total = static_cast<int64_t>(dims[0]);
+    const int dim = static_cast<int>(dims[1]);
+    const int nq = std::min<int64_t>(n, total);
+
+    std::vector<float> flat(static_cast<size_t>(nq) * static_cast<size_t>(dim));
+
+    hsize_t offset[2] = {0, 0};
+    hsize_t count[2] = {static_cast<hsize_t>(nq), static_cast<hsize_t>(dim)};
+    space.selectHyperslab(H5S_SELECT_SET, count, offset);
+
+    H5::DataSpace memspace(2, count);
+    dataset.read(flat.data(), H5::PredType::NATIVE_FLOAT, memspace, space);
+
+    std::vector<std::vector<float>> vectors;
+    vectors.reserve(static_cast<size_t>(nq));
+    for (int i = 0; i < nq; ++i) {
+        std::vector<float> v(dim);
+        std::copy(
+            flat.begin() + static_cast<size_t>(i) * static_cast<size_t>(dim),
+            flat.begin() + static_cast<size_t>(i + 1) * static_cast<size_t>(dim),
+            v.begin()
+        );
+        vectors.push_back(std::move(v));
+    }
+
+    out_dim = dim;
+    out_dataset_name = dataset_name;
+    return vectors;
+}
+
 int main(int argc, char** argv) {
     std::string server_address = "localhost:50051";
     if (argc > 1) {
@@ -152,7 +220,24 @@ int main(int argc, char** argv) {
     // Health check
     std::cout << "\n=== Health Check ===" << std::endl;
     client.HealthCheck();
-    
+
+    std::cout << "\n=== HDF5 Query Searches (10 queries, k=10) ===" << std::endl;
+    try {
+        int dim = 0;
+        std::string dataset_name;
+        auto queries = read_first_n_vectors_hdf5("data/nytimes-256-angular.hdf5", 10, dim, dataset_name);
+        std::cout << "Loaded " << queries.size() << " queries from dataset: " << dataset_name << ", dim=" << dim << std::endl;
+
+        for (size_t i = 0; i < queries.size(); ++i) {
+            std::cout << "\nSearch " << (i + 1) << ":" << std::endl;
+            client.Search(queries[i], 10);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to read queries / run searches: " << e.what() << std::endl;
+        return 1;
+    }
+
+
     // // Get initial stats
     // std::cout << "\n=== Initial Stats ===" << std::endl;
     // client.GetStats();

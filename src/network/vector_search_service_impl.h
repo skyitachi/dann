@@ -1,7 +1,7 @@
 #pragma once
 
 #include <grpc/grpc.h>
-#include <grpc++/grpc++.h>
+#include <grpcpp/grpcpp.h>
 #include "dann/vector_index.h"
 #include "vector_service.pb.h"
 #include "vector_service.grpc.pb.h"

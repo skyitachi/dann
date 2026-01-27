@@ -216,6 +216,20 @@ if(Protobuf_FOUND AND gRPC_FOUND)
 
     add_library(myproto ${PROTO_FILES})
 
+    set_target_properties(myproto PROPERTIES LINKER_LANGUAGE CXX)
+
+    # Generated headers are produced under the build directory (${binary_dir}/proto).
+    # Keep this include dir on myproto so consumers can include "vector_service.pb.h".
+    target_include_directories(myproto PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/proto)
+
+    # Ensure protobuf headers (e.g. google/protobuf/runtime_version.h) are visible when compiling
+    # generated *.pb.cc sources.
+    if(TARGET protobuf::libprotobuf)
+        target_link_libraries(myproto PUBLIC protobuf::libprotobuf)
+    elseif(GRPC_FOUND_PKGCONFIG)
+        target_include_directories(myproto PUBLIC ${PROTOBUF_INCLUDE_DIRS})
+        target_link_libraries(myproto PUBLIC ${PROTOBUF_LIBRARIES})
+    endif()
 
 #    # Create generated include directory
 #    file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/generated)
@@ -224,18 +238,19 @@ if(Protobuf_FOUND AND gRPC_FOUND)
     if(GRPC_FOUND_SYSTEM)
         target_link_libraries(myproto
                 PUBLIC
-                protobuf::libprotobuf
                 gRPC::grpc
                 gRPC::grpc++
         )
-        target_include_directories(myproto PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/proto)
-        target_include_directories(myproto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
         get_target_property(grpc_cpp_plugin_location gRPC::grpc_cpp_plugin LOCATION)
-        protobuf_generate(TARGET myproto LANGUAGE cpp)
-        protobuf_generate(TARGET myproto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}")
-        target_link_libraries(dann_server
-            PRIVATE
-                myproto
+        protobuf_generate(TARGET myproto LANGUAGE cpp
+            IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
+            PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
+        )
+        protobuf_generate(TARGET myproto LANGUAGE grpc
+            IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
+            PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
+            GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+            PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}"
         )
 
         # Use system protobuf generators with standard CMake functions
@@ -262,33 +277,31 @@ if(Protobuf_FOUND AND gRPC_FOUND)
 #            list(APPEND ALL_PROTO_SRCS ${PROTO_SRCS} ${GRPC_SRCS})
 #        endforeach()
     else()
-        # Use third_party protobuf generators
-        set(PROTOC "${GRPC_ROOT}/bin/protoc")
-        set(GRPC_CPP_PLUGIN "${GRPC_ROOT}/bin/grpc_cpp_plugin")
-        
-        foreach(PROTO_FILE ${PROTO_FILES})
-            get_filename_component(PROTO_NAME ${PROTO_FILE} NAME_WE)
-            get_filename_component(PROTO_DIR ${PROTO_FILE} DIRECTORY)
-            
-            set(PROTO_HDR "${CMAKE_CURRENT_SOURCE_DIR}/include/generated/${PROTO_NAME}.pb.h")
-            set(PROTO_SRC "${CMAKE_CURRENT_SOURCE_DIR}/include/generated/${PROTO_NAME}.pb.cc")
-            set(GRPC_HDR "${CMAKE_CURRENT_SOURCE_DIR}/include/generated/${PROTO_NAME}.grpc.pb.h")
-            set(GRPC_SRC "${CMAKE_CURRENT_SOURCE_DIR}/include/generated/${PROTO_NAME}.grpc.pb.cc")
-            
-            add_custom_command(
-                OUTPUT ${PROTO_HDR} ${PROTO_SRC} ${GRPC_HDR} ${GRPC_SRC}
-                COMMAND ${PROTOC}
-                ARGS --cpp_out=${CMAKE_CURRENT_SOURCE_DIR}/include/generated
-                     --grpc_out=${CMAKE_CURRENT_SOURCE_DIR}/include/generated
-                     --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}
-                     -I${CMAKE_CURRENT_SOURCE_DIR}
-                     ${PROTO_FILE}
-                DEPENDS ${PROTO_FILE}
-                COMMENT "Generating protobuf and gRPC files for ${PROTO_NAME}"
-            )
-            
-            list(APPEND ALL_PROTO_SRCS ${PROTO_SRC} ${GRPC_SRC})
-        endforeach()
+        # If gRPC wasn't found as a CMake package target, fall back to protoc/grpc_cpp_plugin in PATH.
+        # This supports pkg-config based setups.
+        find_program(PROTOC_EXECUTABLE protoc)
+        find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+        if(NOT PROTOC_EXECUTABLE)
+            message(FATAL_ERROR "protoc not found in PATH")
+        endif()
+        if(NOT GRPC_CPP_PLUGIN_EXECUTABLE)
+            message(FATAL_ERROR "grpc_cpp_plugin not found in PATH")
+        endif()
+
+        protobuf_generate(TARGET myproto LANGUAGE cpp
+            IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
+            PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
+            PROTOC_EXE "${PROTOC_EXECUTABLE}"
+        )
+        protobuf_generate(
+            TARGET myproto
+            LANGUAGE grpc
+            IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
+            GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+            PLUGIN "protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}"
+            PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
+            PROTOC_EXE "${PROTOC_EXECUTABLE}"
+        )
     endif()
     
     # Create protobuf library
@@ -299,6 +312,15 @@ if(Protobuf_FOUND AND gRPC_FOUND)
 
     # Add network sources to main executable
     target_sources(dann_server PRIVATE ${NETWORK_SOURCES})
+
+    # Ensure dann_server can include generated headers (vector_service.pb.h / .grpc.pb.h)
+    # by inheriting myproto's generated include dirs.
+    target_link_libraries(dann_server PRIVATE myproto)
+
+    if(GRPC_FOUND_PKGCONFIG)
+        target_include_directories(dann_server PRIVATE ${GRPC_INCLUDE_DIRS} ${PROTOBUF_INCLUDE_DIRS})
+        target_link_directories(dann_server PRIVATE ${GRPC_LIBRARY_DIRS} ${PROTOBUF_LIBRARY_DIRS})
+    endif()
     
 #    # Link gRPC libraries
 #    if(GRPC_FOUND_PKGCONFIG)
@@ -358,24 +380,32 @@ add_test(NAME DANNTests COMMAND dann_test)
 # gRPC test client
 if(Protobuf_FOUND AND gRPC_FOUND)
     add_executable(test_grpc_client test_grpc_client.cpp)
-    target_link_libraries(test_grpc_client
-        PRIVATE
-            myproto
-    )
-    
+    target_link_libraries(test_grpc_client PRIVATE myproto)
+
+    find_package(HDF5 REQUIRED COMPONENTS CXX)
+    target_include_directories(test_grpc_client PRIVATE ${HDF5_INCLUDE_DIRS})
+    target_link_libraries(test_grpc_client PRIVATE ${HDF5_CXX_LIBRARIES})
+
     # Link gRPC libraries based on how they were found
     if(GRPC_FOUND_SYSTEM)
-        target_link_libraries(test_grpc_client
-            PRIVATE
-                gRPC::grpc++
-                protobuf::libprotobuf
-        )
+        # myproto already links gRPC/protobuf as PUBLIC deps in system mode;
+        # avoid duplicating libraries on the final link line.
     elseif(GRPC_FOUND_PKGCONFIG)
         target_link_libraries(test_grpc_client
             PRIVATE
                 ${GRPC_LIBRARIES}
                 ${PROTOBUF_LIBRARIES}
         )
+
+        target_link_directories(test_grpc_client PRIVATE ${GRPC_LIBRARY_DIRS} ${PROTOBUF_LIBRARY_DIRS})
+
+        target_link_libraries(dann_server
+                PRIVATE
+                ${GRPC_LIBRARIES}
+                ${PROTOBUF_LIBRARIES}
+        )
+
+        target_link_directories(dann_server PRIVATE ${GRPC_LIBRARY_DIRS} ${PROTOBUF_LIBRARY_DIRS})
     else()
         # Third-party gRPC
         target_link_libraries(test_grpc_client

@@ -12,16 +12,32 @@ VectorSearchServiceImpl::VectorSearchServiceImpl(std::shared_ptr<VectorIndex> ve
 }
 
 grpc::Status VectorSearchServiceImpl::Search(grpc::ServerContext* context,
-                                           const dann::SearchRequest* request,
-                                           dann::SearchResponse* response) {
+                                           const SearchRequest* request,
+                                           SearchResponse* response) {
     try {
-        // Convert protobuf request to internal QueryRequest
-        // QueryRequest query_request = convert_to_query_request(*request);
-        
-        // Execute query using query router
         auto start_time = std::chrono::high_resolution_clock::now();
+        std::vector<float> query_vector(request->query_vector().begin(),
+                                       request->query_vector().end());
 
-        // TODO
+        auto search_result = vector_index_->search(query_vector, request->k());
+        response->set_success(true);
+
+        // Calculate query time
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        response->set_query_time_ms(duration.count());
+
+        // Convert search results to protobuf format
+        for (const auto& result : search_result) {
+            auto* proto_result = response->add_results();
+            proto_result->set_id(result.id);
+            proto_result->set_distance(result.distance);
+            
+            // Add vector data if needed
+            for (float val : result.vector) {
+                proto_result->add_vector(val);
+            }
+        }
 
         return grpc::Status::OK;
         

@@ -4,6 +4,8 @@
 #include <vector>
 #include <chrono>
 #include <random>
+#include <filesystem>
+#include <cstdlib>
 
 #ifdef HAVE_GRPC
 #include "dann/rpc_server.h"
@@ -11,6 +13,7 @@
 #endif
 
 using namespace dann;
+namespace fs = std::filesystem;
 
 void print_usage() {
     std::cout << "DANN - Distributed Approximate Nearest Neighbors\n";
@@ -25,6 +28,7 @@ void print_usage() {
     std::cout << "  --dimension <dim>     Vector dimension (default: 128)\n";
     std::cout << "  --index-type <type>   Index type: Flat, IVF, HNSW (default: IVF)\n";
     std::cout << "  --seed-nodes <nodes>  Comma-separated list of seed nodes\n";
+    std::cout << "  --index <index>       faiss index file";
     std::cout << "  --help                Show this help message\n";
 }
 
@@ -37,8 +41,26 @@ struct Config {
 #endif
     int dimension = 128;
     std::string index_type = "IVF";
+    std::string index_path = "";
     std::vector<std::string> seed_nodes;
 };
+
+std::string to_absolute_path(const std::string& path) {
+    if (path.empty()) {
+        return path;
+    }
+    
+    fs::path p(path);
+    if (p.is_absolute()) {
+        return path;
+    }
+    
+    // Get current working directory
+    fs::path current_dir = fs::current_path();
+    fs::path absolute_path = current_dir / p;
+    
+    return absolute_path.lexically_normal().string();
+}
 
 Config parse_arguments(int argc, char* argv[]) {
     Config config;
@@ -63,6 +85,8 @@ Config parse_arguments(int argc, char* argv[]) {
             config.dimension = std::stoi(argv[++i]);
         } else if (arg == "--index-type" && i + 1 < argc) {
             config.index_type = argv[++i];
+        } else if (arg == "--index") {
+            config.index_path = to_absolute_path(argv[++i]);
         } else if (arg == "--seed-nodes" && i + 1 < argc) {
             std::string seeds = argv[++i];
             size_t pos = 0;
@@ -103,6 +127,9 @@ void run_demo(const Config& config) {
     
     // Create components
     auto vector_index = std::make_shared<VectorIndex>(config.dimension, config.index_type);
+    if (!config.index_path.empty()) {
+        vector_index->load_index(config.index_path);
+    }
     // auto node_manager = std::make_shared<NodeManager>(config.node_id, config.address, config.port);
     // auto consistency_manager = std::make_shared<ConsistencyManager>(config.node_id);
     // auto query_router = std::make_shared<QueryRouter>(node_manager);
