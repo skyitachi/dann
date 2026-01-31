@@ -149,7 +149,7 @@ find_package(PkgConfig QUIET)
 if(PKG_CONFIG_FOUND)
     pkg_check_modules(GRPC QUIET grpc++)
     pkg_check_modules(PROTOBUF QUIET protobuf)
-    
+
     if(GRPC_FOUND AND PROTOBUF_FOUND)
         message(STATUS "Building with gRPC support (pkg-config)")
         set(GRPC_FOUND_PKGCONFIG TRUE)
@@ -180,20 +180,6 @@ if(NOT gRPC_FOUND AND EXISTS "/opt/homebrew")
             message(WARNING "Protobuf not found, gRPC may not work properly")
         endif()
     endif()
-endif()
-
-# Approach 3: Fall back to third-party
-if(NOT gRPC_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/grpc/install")
-    message(STATUS "Building with gRPC support (third_party)")
-    set(GRPC_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/grpc/install")
-    
-    include_directories(${GRPC_ROOT}/include)
-    link_directories(${GRPC_ROOT}/lib)
-    
-    # Manually set the required variables
-    set(Protobuf_FOUND TRUE)
-    set(gRPC_FOUND TRUE)
-    set(GRPC_FOUND_THIRDPARTY TRUE)
 endif()
 
 if(NOT gRPC_FOUND)
@@ -252,56 +238,72 @@ if(Protobuf_FOUND AND gRPC_FOUND)
             GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
             PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}"
         )
-
-        # Use system protobuf generators with standard CMake functions
-#        foreach(PROTO_FILE ${PROTO_FILES})
-#            get_filename_component(PROTO_NAME ${PROTO_FILE} NAME_WE)
-#
-#            protobuf_generate_cpp(
-#                PROTO_SRCS
-#                PROTO_HDRS
-#                ${PROTO_FILE}
-#            )
-#
-#            grpc_generate_cpp(
-#                GRPC_SRCS
-#                GRPC_HDRS
-#                ${PROTO_FILE}
-#            )
-#
-#            # Copy generated headers to include/generated
-#            foreach(HEADER ${PROTO_HDRS} ${GRPC_HDRS})
-#                file(COPY ${HEADER} DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/include/generated)
-#            endforeach()
-#
-#            list(APPEND ALL_PROTO_SRCS ${PROTO_SRCS} ${GRPC_SRCS})
-#        endforeach()
     else()
         # If gRPC wasn't found as a CMake package target, fall back to protoc/grpc_cpp_plugin in PATH.
         # This supports pkg-config based setups.
-        find_program(PROTOC_EXECUTABLE protoc)
-        find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-        if(NOT PROTOC_EXECUTABLE)
-            message(FATAL_ERROR "protoc not found in PATH")
-        endif()
-        if(NOT GRPC_CPP_PLUGIN_EXECUTABLE)
-            message(FATAL_ERROR "grpc_cpp_plugin not found in PATH")
-        endif()
+        if(GRPC_FOUND_PKGCONFIG)
+            # Use pkg-config found protoc and grpc_cpp_plugin
+            message(STATUS "compile proto by pkgconfig")
+            find_package(OpenSSL REQUIRED)
+            find_program(PROTOC_EXECUTABLE protoc)
+            find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+            if(NOT PROTOC_EXECUTABLE)
+                message(FATAL_ERROR "protoc not found in PATH")
+            endif()
+            if(NOT GRPC_CPP_PLUGIN_EXECUTABLE)
+                message(FATAL_ERROR "grpc_cpp_plugin not found in PATH")
+            endif()
+            protobuf_generate(TARGET myproto LANGUAGE cpp
+                IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
+                PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
+                PROTOC_EXE "${PROTOC_EXECUTABLE}"
+            )
+            protobuf_generate(
+                TARGET myproto
+                LANGUAGE grpc
+                IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
+                GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+                PLUGIN "protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}"
+                PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
+                PROTOC_EXE "${PROTOC_EXECUTABLE}"
+            )
+            
+            # Link myproto with gRPC/Protobuf/OpenSSL dependencies
+            target_include_directories(myproto PUBLIC ${GRPC_INCLUDE_DIRS} ${PROTOBUF_INCLUDE_DIRS})
+            target_link_libraries(myproto
+                PUBLIC
+                    ${GRPC_LIBRARIES}
+                    ${PROTOBUF_LIBRARIES}
+                    pthread
+                    OpenSSL::SSL
+                    OpenSSL::Crypto
+            )
+        else()
+            # Fall back to PATH search (for third-party or manual setups)
+            find_program(PROTOC_EXECUTABLE protoc)
+            find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+            if(NOT PROTOC_EXECUTABLE)
+                message(FATAL_ERROR "protoc not found in PATH")
+            endif()
+            if(NOT GRPC_CPP_PLUGIN_EXECUTABLE)
+                message(FATAL_ERROR "grpc_cpp_plugin not found in PATH")
+            endif()
 
-        protobuf_generate(TARGET myproto LANGUAGE cpp
-            IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
-            PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
-            PROTOC_EXE "${PROTOC_EXECUTABLE}"
-        )
-        protobuf_generate(
-            TARGET myproto
-            LANGUAGE grpc
-            IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
-            GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
-            PLUGIN "protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}"
-            PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
-            PROTOC_EXE "${PROTOC_EXECUTABLE}"
-        )
+            protobuf_generate(TARGET myproto LANGUAGE cpp
+                IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
+                PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
+                PROTOC_EXE "${PROTOC_EXECUTABLE}"
+            )
+            protobuf_generate(
+                TARGET myproto
+                LANGUAGE grpc
+                IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto
+                GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+                PLUGIN "protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}"
+                PROTOC_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto"
+                PROTOC_EXE "${PROTOC_EXECUTABLE}"
+            )
+        endif()
     endif()
     
     # Create protobuf library
@@ -321,24 +323,7 @@ if(Protobuf_FOUND AND gRPC_FOUND)
         target_include_directories(dann_server PRIVATE ${GRPC_INCLUDE_DIRS} ${PROTOBUF_INCLUDE_DIRS})
         target_link_directories(dann_server PRIVATE ${GRPC_LIBRARY_DIRS} ${PROTOBUF_LIBRARY_DIRS})
     endif()
-    
-#    # Link gRPC libraries
-#    if(GRPC_FOUND_PKGCONFIG)
-#        # Already linked above with pkg-config
-#    elseif(GRPC_FOUND_SYSTEM)
-#        target_link_libraries(dann_server
-#            PRIVATE
-#                gRPC::grpc++
-#        )
-#    else()
-#        target_link_libraries(dann_server
-#            PRIVATE
-#                ${GRPC_ROOT}/lib/libgrpc++.a
-#                ${GRPC_ROOT}/lib/libgrpc.a
-#                ${GRPC_ROOT}/lib/libgpr.a
-#        )
-#    endif()
-    
+
     # Add compile definition for gRPC support
     target_compile_definitions(dann_server PUBLIC HAVE_GRPC)
     
@@ -382,6 +367,10 @@ if(Protobuf_FOUND AND gRPC_FOUND)
     add_executable(test_grpc_client test_grpc_client.cpp)
     target_link_libraries(test_grpc_client PRIVATE myproto)
 
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_options(test_grpc_client PRIVATE -Wl,--no-as-needed)
+    endif()
+
     find_package(HDF5 REQUIRED COMPONENTS CXX)
     target_include_directories(test_grpc_client PRIVATE ${HDF5_INCLUDE_DIRS})
     target_link_libraries(test_grpc_client PRIVATE ${HDF5_CXX_LIBRARIES})
@@ -406,17 +395,15 @@ if(Protobuf_FOUND AND gRPC_FOUND)
         )
 
         target_link_directories(dann_server PRIVATE ${GRPC_LIBRARY_DIRS} ${PROTOBUF_LIBRARY_DIRS})
-    else()
-        # Third-party gRPC
-        target_link_libraries(test_grpc_client
-            PRIVATE
-                ${GRPC_ROOT}/lib/libgrpc++.a
-                ${GRPC_ROOT}/lib/libgrpc.a
-                ${GRPC_ROOT}/lib/libgpr.a
-                ${GRPC_ROOT}/lib/libprotobuf.a
-        )
+        # Ensure OpenSSL comes after static gRPC libs on the final link line (Linux only)
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            target_link_libraries(test_grpc_client PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+        endif()
     endif()
-    
-    # Add thread support
-    target_link_libraries(test_grpc_client PRIVATE pthread)
+
+    # HDF5 depends on zlib, ensure it's linked (Linux only)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        find_package(ZLIB REQUIRED)
+        target_link_libraries(test_grpc_client PRIVATE ZLIB::ZLIB)
+    endif()
 endif()

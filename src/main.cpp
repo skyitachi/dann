@@ -175,22 +175,7 @@ void run_demo(const Config& config) {
     // Enable query caching
     // query_router->enable_caching(true);
     // query_router->set_load_balance_strategy("round_robin");
-    
-    // Generate sample data
-    std::cout << "Generating sample data...\n";
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    
-    const size_t num_vectors = 10000;
-    std::vector<float> vectors;
-    std::vector<int64_t> ids;
-    
-    for (size_t i = 0; i < num_vectors; ++i) {
-        auto vector = generate_random_vector(config.dimension, gen);
-        vectors.insert(vectors.end(), vector.begin(), vector.end());
-        ids.push_back(static_cast<int64_t>(i));
-    }
-    
+
     // Bulk load vectors
     // std::cout << "Bulk loading " << num_vectors << " vectors...\n";
     // // BulkLoadRequest load_request(vectors, ids, 1000);
