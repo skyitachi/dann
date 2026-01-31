@@ -1,4 +1,5 @@
 #include "dann/vector_index.h"
+#include "dann/index.h"
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -27,8 +28,9 @@ void print_usage() {
 #endif
     std::cout << "  --dimension <dim>     Vector dimension (default: 128)\n";
     std::cout << "  --index-type <type>   Index type: Flat, IVF, HNSW (default: IVF)\n";
+    std::cout << "  --shards <shards>     Number of shards (default: 1)\n";
+    std::cout << "  --index <index>       faiss index file\n";
     std::cout << "  --seed-nodes <nodes>  Comma-separated list of seed nodes\n";
-    std::cout << "  --index <index>       faiss index file";
     std::cout << "  --help                Show this help message\n";
 }
 
@@ -42,6 +44,7 @@ struct Config {
     int dimension = 128;
     std::string index_type = "IVF";
     std::string index_path = "";
+    int shard_count = 1;
     std::vector<std::string> seed_nodes;
 };
 
@@ -85,6 +88,8 @@ Config parse_arguments(int argc, char* argv[]) {
             config.dimension = std::stoi(argv[++i]);
         } else if (arg == "--index-type" && i + 1 < argc) {
             config.index_type = argv[++i];
+        } else if (arg == "--shards" && i + 1 < argc) {
+            config.shard_count = std::stoi(argv[++i]);
         } else if (arg == "--index") {
             config.index_path = to_absolute_path(argv[++i]);
         } else if (arg == "--seed-nodes" && i + 1 < argc) {
@@ -123,12 +128,16 @@ void run_demo(const Config& config) {
 #endif
     std::cout << "  Dimension: " << config.dimension << "\n";
     std::cout << "  Index Type: " << config.index_type << "\n";
+    std::cout << "  Shards: " << config.shard_count << "\n";
     std::cout << "\n";
     
     // Create components
-    auto vector_index = std::make_shared<VectorIndex>(config.dimension, config.index_type);
+    auto index = std::make_shared<Index>("default", config.dimension, config.shard_count, config.index_type);
     if (!config.index_path.empty()) {
-        vector_index->load_index(config.index_path);
+        // Currently only supported for single-shard setups.
+        if (index->shard_count() == 1) {
+            index->shard(0)->load_index(config.index_path);
+        }
     }
     // auto node_manager = std::make_shared<NodeManager>(config.node_id, config.address, config.port);
     // auto consistency_manager = std::make_shared<ConsistencyManager>(config.node_id);
@@ -138,7 +147,7 @@ void run_demo(const Config& config) {
 #ifdef HAVE_GRPC
     // Create and start gRPC server
     auto rpc_server = std::make_shared<RPCServer>(config.address, config.grpc_port);
-    auto search_service = std::make_unique<VectorSearchServiceImpl>(vector_index);
+    auto search_service = std::make_unique<VectorSearchServiceImpl>(index);
     rpc_server->register_service(std::move(search_service));
     rpc_server->set_max_threads(8);
     
@@ -205,67 +214,14 @@ void run_demo(const Config& config) {
     //
     // std::cout << "\nBulk load " << (load_result ? "succeeded" : "failed")
     //           << " in " << load_time.count() << " ms\n";
-    
-    // Perform sample queries
-    std::cout << "\nPerforming sample queries...\n";
-    const int num_queries = 10;
-    
-    // for (int i = 0; i < num_queries; ++i) {
-    //     auto query_vector = generate_random_vector(config.dimension, gen);
-    //     QueryRequest query(query_vector, 10);
-    //
-    //     auto query_start = std::chrono::high_resolution_clock::now();
-    //     auto response = query_router->execute_query(query);
-    //     auto query_end = std::chrono::high_resolution_clock::now();
-    //     auto query_time = std::chrono::duration_cast<std::chrono::milliseconds>(query_end - query_start);
-    //
-    //     std::cout << "Query " << (i + 1) << ": "
-    //               << (response.success ? "Success" : "Failed")
-    //               << ", Time: " << query_time.count() << " ms"
-    //               << ", Results: " << response.results.size() << "\n";
-    // }
-    //
-    // // Show metrics
-    // std::cout << "\n=== Performance Metrics ===\n";
-    //
-    // auto query_metrics = query_router->get_metrics();
-    // std::cout << "Query Metrics:\n";
-    // std::cout << "  Total queries: " << query_metrics.total_queries << "\n";
-    // std::cout << "  Successful queries: " << query_metrics.successful_queries << "\n";
-    // std::cout << "  Failed queries: " << query_metrics.failed_queries << "\n";
-    // std::cout << "  Average response time: " << query_metrics.avg_response_time_ms << " ms\n";
-    //
-    // auto load_metrics = bulk_loader->get_metrics();
-    // std::cout << "\nBulk Load Metrics:\n";
-    // std::cout << "  Total loads: " << load_metrics.total_loads << "\n";
-    // std::cout << "  Successful loads: " << load_metrics.successful_loads << "\n";
-    // std::cout << "  Failed loads: " << load_metrics.failed_loads << "\n";
-    // std::cout << "  Average load time: " << load_metrics.avg_load_time_ms << " ms\n";
-    // std::cout << "  Total vectors loaded: " << load_metrics.total_vectors_loaded << "\n";
-    // std::cout << "  Average vectors/second: " << load_metrics.avg_vectors_per_second << "\n";
-    //
-    // // Show cluster information
-    // std::cout << "\n=== Cluster Information ===\n";
-    // auto cluster_nodes = node_manager->get_cluster_nodes();
-    // std::cout << "Cluster nodes (" << cluster_nodes.size() << "):\n";
-    // for (const auto& node : cluster_nodes) {
-    //     std::cout << "  " << node.node_id << ": " << node.address << ":" << node.port
-    //               << " (" << (node.is_active ? "active" : "inactive") << ")\n";
-    // }
-    //
-    // auto assigned_shards = node_manager->get_assigned_shards();
-    // std::cout << "Assigned shards: ";
-    // for (int shard : assigned_shards) {
-    //     std::cout << shard << " ";
-    // }
-    // std::cout << "\n";
-    
+
     // Index information
     std::cout << "\n=== Index Information ===\n";
-    std::cout << "Index type: " << vector_index->index_type() << "\n";
-    std::cout << "Index dimension: " << vector_index->dimension() << "\n";
-    std::cout << "Index size: " << vector_index->size() << " vectors\n";
-    std::cout << "Index version: " << vector_index->get_version() << "\n";
+    std::cout << "Index name: " << index->name() << "\n";
+    std::cout << "Index type: " << index->index_type() << "\n";
+    std::cout << "Index dimension: " << index->dimension() << "\n";
+    std::cout << "Index size: " << index->size() << " vectors\n";
+    std::cout << "Shard count: " << index->shard_count() << "\n";
     
     // Keep server running
     std::cout << "\nServer running. Press Enter to stop...\n";

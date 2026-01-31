@@ -80,6 +80,7 @@ endif()
 # Core library sources (minimal version without protobuf for testing)
 set(CORE_SOURCES_MINIMAL
     src/core/vector_index.cpp
+    src/core/index.cpp
 )
 
 # Create minimal core library for testing

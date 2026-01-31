@@ -2,7 +2,7 @@
 
 #include <grpc/grpc.h>
 #include <grpcpp/grpcpp.h>
-#include "dann/vector_index.h"
+#include "dann/index.h"
 #include "vector_service.pb.h"
 #include "vector_service.grpc.pb.h"
 #include "dann/types.h"
@@ -12,7 +12,7 @@ namespace dann {
 
 class VectorSearchServiceImpl final : public dann::VectorSearchService::Service {
 public:
-    VectorSearchServiceImpl(std::shared_ptr<VectorIndex> vector_index);
+    VectorSearchServiceImpl(std::shared_ptr<Index> index);
     
     // gRPC service implementations
     grpc::Status Search(grpc::ServerContext* context,
@@ -44,7 +44,7 @@ public:
                             dann::HealthCheckResponse* response) override;
 
 private:
-    std::shared_ptr<VectorIndex> vector_index_;
+    std::shared_ptr<Index> index_;
 
     // Helper methods
     // SearchResult convert_to_search_result(const ::dann::SearchResult& proto_result) const;

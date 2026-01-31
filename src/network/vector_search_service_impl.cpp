@@ -4,10 +4,10 @@
 
 namespace dann {
 
-VectorSearchServiceImpl::VectorSearchServiceImpl(std::shared_ptr<VectorIndex> vector_index)
-    : vector_index_(std::move(vector_index)) {
-    if (!vector_index_) {
-        throw std::invalid_argument("VectorIndex cannot be null");
+VectorSearchServiceImpl::VectorSearchServiceImpl(std::shared_ptr<Index> index)
+    : index_(std::move(index)) {
+    if (!index_) {
+        throw std::invalid_argument("Index cannot be null");
     }
 }
 
@@ -19,7 +19,7 @@ grpc::Status VectorSearchServiceImpl::Search(grpc::ServerContext* context,
         std::vector<float> query_vector(request->query_vector().begin(),
                                        request->query_vector().end());
 
-        auto search_result = vector_index_->search(query_vector, request->k());
+        auto search_result = index_->search(query_vector, request->k());
         response->set_success(true);
 
         // Calculate query time
@@ -68,7 +68,7 @@ grpc::Status VectorSearchServiceImpl::AddVectors(grpc::ServerContext* context,
         int batch_size = request->batch_size() > 0 ? request->batch_size() : 1000;
         
         // Add vectors to index
-        bool success = vector_index_->add_vectors_bulk(vectors, ids, batch_size);
+        bool success = index_->add_vectors_bulk(vectors, ids, batch_size);
         
         auto end_time = std::chrono::high_resolution_clock::now();
         auto load_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
@@ -98,7 +98,7 @@ grpc::Status VectorSearchServiceImpl::RemoveVector(grpc::ServerContext* context,
                                                   const dann::RemoveVectorRequest* request,
                                                   dann::RemoveVectorResponse* response) {
     try {
-        bool success = vector_index_->remove_vector(request->id());
+        bool success = index_->remove_vector(request->id());
         
         response->set_success(success);
         if (!success) {
@@ -122,7 +122,7 @@ grpc::Status VectorSearchServiceImpl::UpdateVector(grpc::ServerContext* context,
                                                   dann::UpdateVectorResponse* response) {
     try {
         std::vector<float> vector_data(request->vector().begin(), request->vector().end());
-        bool success = vector_index_->update_vector(request->id(), vector_data);
+        bool success = index_->update_vector(request->id(), vector_data);
         
         response->set_success(success);
         if (!success) {
@@ -145,10 +145,10 @@ grpc::Status VectorSearchServiceImpl::GetVector(grpc::ServerContext* context,
                                               const dann::GetVectorRequest* request,
                                               dann::GetVectorResponse* response) {
     try {
-        // Note: VectorIndex doesn't have a get_vector method, so this is a placeholder
-        // In a real implementation, you would need to store vectors separately or extend VectorIndex
+        // Note: Index doesn't have a get_vector method, so this is a placeholder
+        // In a real implementation, you would need to store vectors separately or extend Index
         response->set_success(false);
-        response->set_error_message("GetVector not implemented - VectorIndex doesn't support vector retrieval");
+        response->set_error_message("GetVector not implemented - Index doesn't support vector retrieval");
         
         Logger::instance().warnf("GetVector called but not implemented for id={}", request->id());
         
@@ -167,9 +167,9 @@ grpc::Status VectorSearchServiceImpl::GetStats(grpc::ServerContext* context,
                                              dann::StatsResponse* response) {
     try {
         response->set_success(true);
-        response->set_total_vectors(vector_index_->size());
-        response->set_index_type(vector_index_->index_type());
-        response->set_dimension(vector_index_->dimension());
+        response->set_total_vectors(index_->size());
+        response->set_index_type(index_->index_type());
+        response->set_dimension(index_->dimension());
         
         // Get query router metrics
         // auto query_metrics = query_router_->get_metrics();
@@ -178,7 +178,7 @@ grpc::Status VectorSearchServiceImpl::GetStats(grpc::ServerContext* context,
         //
         // // Add custom metrics
         // auto& custom_metrics = *response->mutable_custom_metrics();
-        // custom_metrics["index_version"] = static_cast<double>(vector_index_->get_version());
+        // custom_metrics["index_version"] = static_cast<double>(index_->get_version());
         //
         // Logger::instance().infof("GetStats completed: vectors={}, type={}, dimension={}",
         //         response->total_vectors(), response->index_type(), response->dimension());
@@ -203,8 +203,10 @@ grpc::Status VectorSearchServiceImpl::HealthCheck(grpc::ServerContext* context,
         response->set_uptime_seconds(0); // TODO: implement uptime tracking
         
         auto& details = *response->mutable_details();
-        details["index_size"] = std::to_string(vector_index_->size());
-        details["index_type"] = vector_index_->index_type();
+        details["index_size"] = std::to_string(index_->size());
+        details["index_type"] = index_->index_type();
+        details["index_name"] = index_->name();
+        details["shard_count"] = std::to_string(index_->shard_count());
         
         return grpc::Status::OK;
         

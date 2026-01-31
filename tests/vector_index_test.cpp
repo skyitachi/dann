@@ -1,4 +1,5 @@
 #include "dann/vector_index.h"
+#include "dann/index.h"
 #include <gtest/gtest.h>
 #include <memory>
 #include <vector>
@@ -73,6 +74,53 @@ protected:
     std::vector<float> test_vectors_;
     std::vector<int64_t> test_ids_;
 };
+
+TEST(IndexTest, ShardRoutingAndSize) {
+    const int dimension = 8;
+    Index index("default", dimension, 4, "IVF");
+
+    std::vector<float> vectors;
+    std::vector<int64_t> ids;
+    for (int64_t i = 0; i < 20; ++i) {
+        ids.push_back(i);
+        for (int d = 0; d < dimension; ++d) {
+            vectors.push_back(static_cast<float>(i + d));
+        }
+    }
+
+    ASSERT_TRUE(index.add_vectors(vectors, ids));
+    EXPECT_EQ(index.shard_count(), 4);
+    EXPECT_EQ(index.size(), ids.size());
+
+    size_t sum = 0;
+    for (int s = 0; s < index.shard_count(); ++s) {
+        auto shard = index.shard(s);
+        ASSERT_NE(shard, nullptr);
+        sum += shard->size();
+    }
+    EXPECT_EQ(sum, ids.size());
+}
+
+TEST(IndexTest, SearchMergeTopK) {
+    const int dimension = 8;
+    Index index("default", dimension, 3, "IVF");
+
+    std::vector<float> vectors;
+    std::vector<int64_t> ids;
+    for (int64_t i = 0; i < 30; ++i) {
+        ids.push_back(i);
+        for (int d = 0; d < dimension; ++d) {
+            vectors.push_back(static_cast<float>(i + d));
+        }
+    }
+
+    ASSERT_TRUE(index.add_vectors(vectors, ids));
+
+    std::vector<float> query(dimension, 0.1f);
+    const int k = 5;
+    auto results = index.search(query, k);
+    EXPECT_LE(results.size(), static_cast<size_t>(k));
+}
 
 // Constructor Tests
 TEST_F(VectorIndexTest, ConstructorWithDefaultParameters) {
