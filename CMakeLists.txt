@@ -270,6 +270,7 @@ if(Protobuf_FOUND AND gRPC_FOUND)
             
             # Link myproto with gRPC/Protobuf/OpenSSL dependencies
             target_include_directories(myproto PUBLIC ${GRPC_INCLUDE_DIRS} ${PROTOBUF_INCLUDE_DIRS})
+            target_link_directories(myproto PUBLIC ${GRPC_LIBRARY_DIRS} ${PROTOBUF_LIBRARY_DIRS})
             target_link_libraries(myproto
                 PUBLIC
                     ${GRPC_LIBRARIES}
@@ -380,21 +381,8 @@ if(Protobuf_FOUND AND gRPC_FOUND)
         # myproto already links gRPC/protobuf as PUBLIC deps in system mode;
         # avoid duplicating libraries on the final link line.
     elseif(GRPC_FOUND_PKGCONFIG)
-        target_link_libraries(test_grpc_client
-            PRIVATE
-                ${GRPC_LIBRARIES}
-                ${PROTOBUF_LIBRARIES}
-        )
-
-        target_link_directories(test_grpc_client PRIVATE ${GRPC_LIBRARY_DIRS} ${PROTOBUF_LIBRARY_DIRS})
-
-        target_link_libraries(dann_server
-                PRIVATE
-                ${GRPC_LIBRARIES}
-                ${PROTOBUF_LIBRARIES}
-        )
-
-        target_link_directories(dann_server PRIVATE ${GRPC_LIBRARY_DIRS} ${PROTOBUF_LIBRARY_DIRS})
+        # myproto already links gRPC/protobuf as PUBLIC deps in pkg-config mode;
+        # avoid duplicating libraries on the final link line.
         # Ensure OpenSSL comes after static gRPC libs on the final link line (Linux only)
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             target_link_libraries(test_grpc_client PRIVATE OpenSSL::SSL OpenSSL::Crypto)
