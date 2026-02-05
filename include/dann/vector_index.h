@@ -43,8 +43,6 @@ public:
     // Consistency support
     uint64_t get_version() const;
     void set_version(uint64_t version);
-    std::vector<InternalIndexOperation> get_pending_operations();
-    void clear_pending_operations();
     
 private:
     std::unique_ptr<faiss::Index> index_;

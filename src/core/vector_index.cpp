@@ -209,16 +209,6 @@ void VectorIndex::set_version(uint64_t version) {
     version_.store(version);
 }
 
-std::vector<InternalIndexOperation> VectorIndex::get_pending_operations() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return pending_operations_;
-}
-
-void VectorIndex::clear_pending_operations() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    pending_operations_.clear();
-}
-
 void VectorIndex::create_index() {
     faiss::Index* base_index = nullptr;
     if (index_type_ == "HNSW" || index_type_ == "hnsw") {
