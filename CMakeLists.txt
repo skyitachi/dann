@@ -81,6 +81,8 @@ endif()
 set(CORE_SOURCES_MINIMAL
     src/core/vector_index.cpp
     src/core/index.cpp
+    src/core/ivf_index.cpp
+    src/core/clustering.cpp
 )
 
 # Create minimal core library for testing

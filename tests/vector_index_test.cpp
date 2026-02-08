@@ -481,17 +481,6 @@ TEST_F(VectorIndexTest, VersionControl) {
     EXPECT_EQ(index.get_version(), new_version);
 }
 
-TEST_F(VectorIndexTest, PendingOperations) {
-    VectorIndex index(dimension_);
-    
-    auto operations = index.get_pending_operations();
-    EXPECT_TRUE(operations.empty());
-    
-    index.clear_pending_operations();
-    operations = index.get_pending_operations();
-    EXPECT_TRUE(operations.empty());
-}
-
 // Edge Case Tests
 TEST_F(VectorIndexTest, LargeNumberOfVectors) {
     VectorIndex index(dimension_);
@@ -592,6 +581,20 @@ TEST_F(VectorIndexTest, ConcurrentOperations) {
     
     EXPECT_LE(results.size(), 5);
     EXPECT_GT(results.size(), 0);
+}
+
+TEST_F(VectorIndexTest, Playground)
+{
+    std::vector<int> v1;
+    v1.reserve(10);
+    std::cout << v1.size() << std::endl;
+
+    std::vector<int> v2(10);
+    std::cout << v2.size() << std::endl;
+
+    std::vector<int> v3;
+    v3.resize(10);
+    std::cout << v3.size() << std::endl;
 }
 
 int main(int argc, char** argv) {

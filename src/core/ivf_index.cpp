@@ -2,8 +2,8 @@
 
 namespace dann {
 
-template <typename T = float>
-IVFIndex<T>::IVFIndex(int dimension, int nlist, int nprobe, const std::string index_build_path)
+template <typename T>
+IVFIndex<T>::IVFIndex(int dimension, int nlist, int nprobe, const std::string& index_build_path)
     : dimension_(dimension), nlist_(nlist), nprobe_(nprobe), index_build_path_(index_build_path) {
 }
 
