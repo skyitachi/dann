@@ -34,7 +34,7 @@ struct Clustering:ClusteringParameters {
             faiss::Index& index,
             const float* x_weights = nullptr);
 
-    void train(faiss::idx_t n, const std::vector<float>& vectors, const std::vector<faiss::idx_t>& ids);
+    void train(faiss::idx_t d, const std::vector<float>& vectors, const std::vector<faiss::idx_t>& ids);
 
     virtual ~Clustering() {}
 

@@ -14,12 +14,17 @@ void Clustering::train(faiss::idx_t n, const float* x, faiss::Index& index, cons
 
 }
 
-void Clustering::train(faiss::idx_t n, const std::vector<float>& vectors, const std::vector<faiss::idx_t>& ids) {
+void Clustering::train(faiss::idx_t d, const std::vector<float>& vectors, const std::vector<faiss::idx_t>& ids) {
     std::vector<faiss::idx_t> local_indices(ids.size());
     std::iota(local_indices.begin(), local_indices.end(), static_cast<faiss::idx_t>(0));
 
     std::mt19937_64 rng(static_cast<uint64_t>(seed));
     std::shuffle(local_indices.begin(), local_indices.end(), rng);
+
+    // 取random_sample_count数量的向量做k-means
+    uint64_t random_sample_count = get_sample_count(ids.size());
+
+
 }
 
 uint64_t Clustering::get_sample_count(faiss::idx_t n) {
