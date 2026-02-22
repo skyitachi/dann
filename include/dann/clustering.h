@@ -11,12 +11,13 @@
 namespace dann {
 
 struct ClusteringParameters {
-    int niter = 25;
+    int niter = 25; // inner iteration counts
     bool int_centroids = false;
     int min_points_per_centroids = 39;
     int max_points_per_centroids = 256;
     float max_sample_ratio = 0.22;
     int seed = 1234;
+    int nredo = 1; // outer iteration counts
 };
 
 struct Clustering:ClusteringParameters {
@@ -40,6 +41,7 @@ struct Clustering:ClusteringParameters {
 
 private:
     uint64_t get_sample_count(faiss::idx_t n);
+
 
 };
 /** simplified interface

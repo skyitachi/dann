@@ -137,6 +137,7 @@ set(UTILS_SOURCES
     src/utils/logger.cpp
     src/utils/config.cpp
     src/utils/metrics.cpp
+        src/utils/util.cpp
 )
 
 # Create utils library
