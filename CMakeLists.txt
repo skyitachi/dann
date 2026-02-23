@@ -349,7 +349,7 @@ endif()
 
 # Test executable (minimal version without protobuf dependencies)
 #add_executable(dann_test tests/gtest_integration_test.cpp)
-add_executable(dann_test tests/vector_index_test.cpp)
+add_executable(dann_test tests/vector_index_test.cpp tests/clustering_test.cpp)
 
 # Link gtest based on installation method
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
