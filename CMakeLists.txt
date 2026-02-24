@@ -137,7 +137,7 @@ set(UTILS_SOURCES
     src/utils/logger.cpp
     src/utils/config.cpp
     src/utils/metrics.cpp
-        src/utils/util.cpp
+    src/utils/util.cpp
 )
 
 # Create utils library
@@ -354,9 +354,9 @@ add_executable(dann_test tests/vector_index_test.cpp tests/clustering_test.cpp)
 # Link gtest based on installation method
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
     target_link_libraries(dann_test 
-        ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a pthread dann_core_minimal)
+        ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a pthread dann_core_minimal dann_utils)
 else()
-    target_link_libraries(dann_test gtest gtest_main dann_core_minimal)
+    target_link_libraries(dann_test gtest gtest_main dann_core_minimal dann_utils)
 endif()
 
 # Installation (commented out until dann_server is rebuilt)

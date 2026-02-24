@@ -31,7 +31,37 @@ protected:
     }
   }
 
-private:
   std::vector<float> test_vectors_;
-  std::vector<int64_t> test_ids_;
+  std::vector<faiss::idx_t> test_ids_;
+
 };
+
+TEST_F(ClusteringTest, Basic) {
+  generate_test_data();
+  int d = 64;
+  int k = 10;
+  dann::Clustering clustering(d, k);
+
+  clustering.train(test_vectors_, test_ids_);
+  ASSERT_EQ(k, clustering.centroids.size() / d);
+}
+
+TEST_F(ClusteringTest, SimpleDataset) {
+  // 创建明显的聚类数据
+  std::vector<float> simple_data = {
+    // 聚类1: (0,0) 附近
+    0.1f, 0.1f, 0.2f, 0.0f,
+    // 聚类2: (10,10) 附近
+    9.8f, 10.1f, 10.2f, 9.9f
+  };
+  std::vector<faiss::idx_t> simple_ids = {1, 2, 3, 4};
+
+  dann::Clustering clustering(2, 2);
+  clustering.train(simple_data, simple_ids);
+
+  // 验证质心接近预期位置
+  EXPECT_NEAR(clustering.centroids[0], 0.1f, 0.5f);
+  EXPECT_NEAR(clustering.centroids[1], 0.1f, 0.5f);
+  EXPECT_NEAR(clustering.centroids[2], 10.0f, 0.5f);
+  EXPECT_NEAR(clustering.centroids[3], 10.0f, 0.5f);
+}

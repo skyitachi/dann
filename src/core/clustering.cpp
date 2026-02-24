@@ -11,13 +11,18 @@
 #include <random>
 #include <limits>
 #include <memory>
+#include <cassert>
 
 namespace dann {
+
+Clustering::Clustering(int d, int k): d(d), k(k) {}
+
 void Clustering::train(faiss::idx_t n, const float* x, faiss::Index& index, const float* x_weights) {
 
 }
 
 void Clustering::train(const std::vector<float>& vectors, const std::vector<faiss::idx_t>& ids) {
+    assert(vectors.size() / d == ids.size());
     std::vector<faiss::idx_t> local_indices(ids.size());
     std::iota(local_indices.begin(), local_indices.end(), static_cast<faiss::idx_t>(0));
 
