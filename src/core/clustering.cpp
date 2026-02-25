@@ -4,6 +4,7 @@
 
 #include "dann/clustering.h"
 #include "dann/utils.h"
+#include "dann/logger.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,11 +36,12 @@ void Clustering::train(const std::vector<float>& vectors, const std::vector<fais
         for (int i = 0; i < k; i++) {
             std::copy(vectors.begin() +  local_indices[i] * d, vectors.begin() + d * local_indices[i] + d,
                 centroids.begin() + i * d);
+            LOG_INFOF("random centroid: %f, %f", centroids[i * d], centroids[i * d + 1]);
         }
 
         std::unique_ptr<float[]> dis(new float[n]);
         std::unique_ptr<faiss::idx_t[]> assign(new faiss::idx_t[n]);
-        std::vector<float> prev_centroids(d *k);
+        std::vector<float> prev_centroids(d * k);
         float convergence_threshold = 1e-6f;
         for (int t = 0; t < niter; t++) {
             prev_centroids = centroids;
@@ -77,6 +79,7 @@ void Clustering::train(const std::vector<float>& vectors, const std::vector<fais
                 for (int j = 0; j < d; j++) {
                     centroids[i * d + j] /= counts[i];
                 }
+                LOG_INFOF("iter: %d centroid: %f, %f", t, centroids[i * d], centroids[i * d + 1]);
             }
             // 2.3 判断误差
             if (t > 0) {
