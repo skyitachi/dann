@@ -29,11 +29,11 @@ struct Clustering:ClusteringParameters {
     Clustering(int d, int k);
     Clustering(int d, int k, const ClusteringParameters& cp);
 
-     void train(
-            faiss::idx_t n,
-            const float* x,
-            faiss::Index& index,
-            const float* x_weights = nullptr);
+    void train(
+           faiss::idx_t n,
+           const float* x,
+           faiss::Index& index,
+           const float* x_weights = nullptr);
 
     void train(const std::vector<float>& vectors, const std::vector<faiss::idx_t>& ids);
 
