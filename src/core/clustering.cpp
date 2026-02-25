@@ -36,7 +36,6 @@ void Clustering::train(const std::vector<float>& vectors, const std::vector<fais
         for (int i = 0; i < k; i++) {
             std::copy(vectors.begin() +  local_indices[i] * d, vectors.begin() + d * local_indices[i] + d,
                 centroids.begin() + i * d);
-            LOG_INFOF("random centroid: %f, %f", centroids[i * d], centroids[i * d + 1]);
         }
 
         std::unique_ptr<float[]> dis(new float[n]);
@@ -50,7 +49,7 @@ void Clustering::train(const std::vector<float>& vectors, const std::vector<fais
                 float min_dis = std::numeric_limits<float>::max();
                 int centroid_j = 0;
                 for (int j = 0; j < k; j++) {
-                    float dist = L2_distance(&vectors[i], &centroids[j], d);
+                    float dist = L2_distance(&vectors[i * d], &centroids[j * d], d);
                     if (dist < min_dis) {
                         centroid_j = j;
                         min_dis = dist;
@@ -79,7 +78,6 @@ void Clustering::train(const std::vector<float>& vectors, const std::vector<fais
                 for (int j = 0; j < d; j++) {
                     centroids[i * d + j] /= counts[i];
                 }
-                LOG_INFOF("iter: %d centroid: %f, %f", t, centroids[i * d], centroids[i * d + 1]);
             }
             // 2.3 判断误差
             if (t > 0) {

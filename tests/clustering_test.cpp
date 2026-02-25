@@ -3,6 +3,7 @@
 //
 #include <gtest/gtest.h>
 #include "dann/clustering.h"
+#include "dann/utils.h"
 
 #include <random>
 
@@ -64,4 +65,20 @@ TEST_F(ClusteringTest, SimpleDataset) {
   EXPECT_NEAR(clustering.centroids[1], 0.1f, 0.5f);
   EXPECT_NEAR(clustering.centroids[2], 10.0f, 0.5f);
   EXPECT_NEAR(clustering.centroids[3], 10.0f, 0.5f);
+}
+
+TEST(ClusteringUtilsTest, L2Distance) {
+  const float a[] = {1.0f, 2.0f};
+  const float b[] = {4.0f, 6.0f};
+
+  const float dist = dann::L2_distance(a, b, 2);
+  EXPECT_FLOAT_EQ(dist, 25.0f);
+
+  {
+    const float a[] = {9.8f, 10.1f};
+    const float b[] = {0.1f, 0.1f};
+
+    const float dist = dann::L2_distance(a, b, 2);
+    EXPECT_NEAR(dist, 194.09f, 1e-4f);
+  }
 }
