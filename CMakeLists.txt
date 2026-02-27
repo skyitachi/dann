@@ -83,6 +83,7 @@ set(CORE_SOURCES_MINIMAL
     src/core/index.cpp
     src/core/ivf_index.cpp
     src/core/clustering.cpp
+    src/core/distributed_index_ivf.cpp
 )
 
 # Create minimal core library for testing

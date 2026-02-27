@@ -22,26 +22,17 @@ struct ClusteringParameters {
 
 struct Clustering:ClusteringParameters {
     size_t d; // dimension
-    size_t k; // number of centroids
+    int k;
 
     std::vector<float> centroids;
 
     Clustering(int d, int k);
     Clustering(int d, int k, const ClusteringParameters& cp);
 
-    void train(
-           faiss::idx_t n,
-           const float* x,
-           faiss::Index& index,
-           const float* x_weights = nullptr);
-
     void train(const std::vector<float>& vectors, const std::vector<faiss::idx_t>& ids);
+    void train(const std::vector<float>& vectors, size_t n);
 
-    virtual ~Clustering() {}
-
-private:
-    uint64_t get_sample_count(faiss::idx_t n);
-
+    virtual ~Clustering() = default;
 
 };
 /** simplified interface
