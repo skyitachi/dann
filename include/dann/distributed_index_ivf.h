@@ -9,6 +9,7 @@
 #include "dann/ivf_shard.h"
 #include "dann/clustering.h"
 #include <unordered_map>
+#include <memory>
 
 namespace dann
 {
@@ -24,14 +25,14 @@ private:
     std::string name_;
     int dimension_;
     bool is_trained_;
-    // number of vectors initally
+    // number of vectors initially
     int64_t ntotal_;
 
     std::unique_ptr<Clustering> clustering_;
     std::vector<float> global_centroids_;
     std::vector<int> global_centroid_ids_;
 
-    std::unordered_map<int, IndexIVFShard> shards_;
+    std::unordered_map<int, std::unique_ptr<IndexIVFShard>> shards_;
     // cluster nodes
     std::vector<std::string> nodes_;
 
