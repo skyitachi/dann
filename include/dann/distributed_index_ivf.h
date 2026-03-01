@@ -20,6 +20,7 @@ public:
     DistributedIndexIVF(std::string name, int d, int64_t ntotal, int shards, std::vector<std::string> nodes);
     void build_index(const std::vector<float>& vectors, const std::vector<int64_t>& ids);
     void build_index_optimized_by_swe1_5(const std::vector<float>& vectors, const std::vector<int64_t>& ids);
+    void build_index_optimized_by_codex5_3(const std::vector<float>& vectors, const std::vector<int64_t>& ids);
     std::vector<InternalSearchResult> search(const std::vector<float>& query, int k, int nprobe);
 private:
     std::vector<float> sample_training_vectors(const std::vector<float>& vectors, int64_t n_train) const;

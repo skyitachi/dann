@@ -109,6 +109,76 @@ void DistributedIndexIVF::build_index_optimized_by_swe1_5(const std::vector<floa
     is_trained_ = true;
 }
 
+void DistributedIndexIVF::build_index_optimized_by_codex5_3(
+    const std::vector<float>& vectors,
+    const std::vector<int64_t>& ids) {
+    assert(dimension_ != 0);
+    assert(vectors.size() / dimension_ == ids.size());
+
+    const int64_t num_vectors = static_cast<int64_t>(ids.size());
+    if (num_vectors == 0) {
+        global_centroids_.clear();
+        global_centroid_ids_.clear();
+        is_trained_ = false;
+        return;
+    }
+
+    // 1) Sampling + clustering training
+    const int64_t n_train = std::min(static_cast<int64_t>(clustering_->k) * 64, num_vectors);
+    std::vector<float> train_vectors = sample_training_vectors_optimized(vectors, n_train);
+    const int64_t actual_n_train = static_cast<int64_t>(train_vectors.size() / dimension_);
+
+    clustering_->train(train_vectors, actual_n_train);
+    global_centroids_ = clustering_->centroids;
+    const int64_t num_centroids = static_cast<int64_t>(global_centroids_.size() / dimension_);
+
+    global_centroid_ids_.resize(num_centroids);
+    std::iota(global_centroid_ids_.begin(), global_centroid_ids_.end(), 0);
+
+    // 2) First pass: count vectors per centroid to reserve exact capacity
+    std::vector<int64_t> centroid_counts(num_centroids, 0);
+    std::vector<int64_t> assignments(num_vectors, 0);
+    for (int64_t i = 0; i < num_vectors; ++i) {
+        const int64_t centroid = find_closest_optimized(
+            global_centroids_.data(),
+            vectors.data() + i * dimension_,
+            dimension_,
+            static_cast<int>(num_centroids));
+        assignments[i] = centroid;
+        ++centroid_counts[centroid];
+    }
+
+    // 3) Build postings using pre-sized vectors to reduce reallocation/copies
+    std::vector<InvertedList> postings(num_centroids);
+    for (int64_t centroid = 0; centroid < num_centroids; ++centroid) {
+        const size_t c = static_cast<size_t>(centroid_counts[centroid]);
+        postings[centroid].vectors.resize(c * static_cast<size_t>(dimension_));
+        postings[centroid].vector_ids.resize(c);
+    }
+
+    std::vector<int64_t> cursor(num_centroids, 0);
+    for (int64_t i = 0; i < num_vectors; ++i) {
+        const int64_t centroid = assignments[i];
+        const int64_t pos = cursor[centroid]++;
+
+        float* dst = postings[centroid].vectors.data() + pos * dimension_;
+        const float* src = vectors.data() + i * dimension_;
+        std::copy(src, src + dimension_, dst);
+        postings[centroid].vector_ids[static_cast<size_t>(pos)] = ids[static_cast<size_t>(i)];
+    }
+
+    // 4) Distribute postings to shards
+    for (int64_t centroid = 0; centroid < num_centroids; ++centroid) {
+        if (postings[centroid].vector_ids.empty()) {
+            continue;
+        }
+        const int shard_id = static_cast<int>(centroid % shard_counts_);
+        shards_[shard_id]->add_posting(static_cast<int>(centroid), std::move(postings[centroid]));
+    }
+
+    is_trained_ = true;
+}
+
 void DistributedIndexIVF::build_index(const std::vector<float>& vectors, const std::vector<int64_t>& ids) {
     assert(dimension_ != 0);
     assert(vectors.size() / dimension_ == ids.size());
