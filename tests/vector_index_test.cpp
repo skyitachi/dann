@@ -1,5 +1,7 @@
 #include "dann/vector_index.h"
 #include "dann/index.h"
+#include "dann/distributed_index_ivf.h"
+
 #include <gtest/gtest.h>
 #include <memory>
 #include <vector>
@@ -595,6 +597,13 @@ TEST_F(VectorIndexTest, Playground)
     std::vector<int> v3;
     v3.resize(10);
     std::cout << v3.size() << std::endl;
+}
+
+TEST_F(VectorIndexTest, BasicDistributedIVFIndexTest) {
+    DistributedIndexIVF distributed_index_ivf("test_dis_ivf", dimension_,
+        test_ids_.size(), 3, {"node1"});
+
+    distributed_index_ivf.build_index(test_vectors_, test_ids_);
 }
 
 int main(int argc, char** argv) {
