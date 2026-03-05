@@ -2,6 +2,7 @@
 // Created by skyitachi on 2026/2/23.
 //
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "dann/clustering.h"
 #include "dann/utils.h"
 
@@ -175,4 +176,118 @@ TEST(ClusteringUtilsTest, FindClosestTieBreaking) {
   int64_t closest_idx = dann::find_closest(vectors.data(), query, d, n);
   // Should return the first one found (index 0) due to < comparison
   EXPECT_EQ(closest_idx, 0);
+}
+
+TEST(ClusteringUtilsTest, FindClosestKBasic) {
+  std::vector<float> vectors = {
+    1.0f, 1.0f,  // vector 0: distance = 0.5
+    5.0f, 5.0f,  // vector 1: distance = 12.5
+    3.0f, 3.0f,  // vector 2: distance = 4.5
+    2.0f, 2.0f,  // vector 3: distance = 0.5
+    10.0f, 10.0f // vector 4: distance = 80.5
+  };
+  
+  const float query[] = {1.5f, 1.5f};
+  int d = 2;
+  int n = 5;
+  int k = 3;
+  
+  std::vector<int64_t> result = dann::find_closest_k(vectors.data(), query, d, n, k);
+  EXPECT_EQ(result.size(), 3);
+  // Check that we get 3 closest vectors
+  EXPECT_THAT(result, testing::Contains(0));
+  EXPECT_THAT(result, testing::Contains(2));
+  EXPECT_THAT(result, testing::Contains(3));
+}
+
+TEST(ClusteringUtilsTest, FindClosestKSmallK) {
+  std::vector<float> vectors = {
+    1.0f, 1.0f,
+    2.0f, 2.0f,
+    3.0f, 3.0f,
+    4.0f, 4.0f
+  };
+  
+  const float query[] = {0.0f, 0.0f};
+  int d = 2;
+  int n = 4;
+  int k = 2;
+  
+  std::vector<int64_t> result = dann::find_closest_k(vectors.data(), query, d, n, k);
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_THAT(result, testing::Contains(0));
+  EXPECT_THAT(result, testing::Contains(1));
+}
+
+TEST(ClusteringUtilsTest, FindClosestKAllVectors) {
+  std::vector<float> vectors = {
+    1.0f, 2.0f,
+    3.0f, 4.0f,
+    5.0f, 6.0f
+  };
+  
+  const float query[] = {0.0f, 0.0f};
+  int d = 2;
+  int n = 3;
+  int k = 3;
+  
+  std::vector<int64_t> result = dann::find_closest_k(vectors.data(), query, d, n, k);
+  EXPECT_EQ(result.size(), 3);
+}
+
+TEST(ClusteringUtilsTest, FindClosestKVectorVersion) {
+  std::vector<float> x = {1.5f, 1.5f};
+  std::vector<float> y = {
+    1.0f, 1.0f,
+    5.0f, 5.0f,
+    3.0f, 3.0f,
+    2.0f, 2.0f
+  };
+  
+  int d = 2;
+  int n = 4;
+  int k = 2;
+  
+  std::vector<int64_t> result = dann::find_closest_k(x, y, d, n, k);
+  EXPECT_EQ(result.size(), 2);
+}
+
+TEST(ClusteringUtilsTest, FindClosestKHighDimensional) {
+  const int d = 128;
+  const int n = 10;
+  const int k = 5;
+  
+  std::vector<float> vectors(n * d);
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < d; ++j) {
+      vectors[i * d + j] = static_cast<float>(i * 10 + j);
+    }
+  }
+  
+  std::vector<float> query(d);
+  for (int i = 0; i < d; ++i) {
+    query[i] = static_cast<float>(i);
+  }
+  
+  std::vector<int64_t> result = dann::find_closest_k(vectors.data(), query.data(), d, n, k);
+  EXPECT_EQ(result.size(), k);
+  EXPECT_EQ(result[0], 0);
+}
+
+TEST(ClusteringUtilsTest, FindClosestKNegativeValues) {
+  std::vector<float> vectors = {
+    -1.0f, -1.0f,
+    -5.0f, -5.0f,
+    0.0f, 0.0f,
+    1.0f, 1.0f
+  };
+  
+  const float query[] = {-0.3f, -0.3f};
+  int d = 2;
+  int n = 4;
+  int k = 2;
+  
+  std::vector<int64_t> result = dann::find_closest_k(vectors.data(), query, d, n, k);
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_THAT(result, testing::Contains(2));
 }

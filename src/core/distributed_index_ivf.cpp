@@ -39,76 +39,6 @@ DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int64_t n, int
     }
 }
 
-void DistributedIndexIVF::build_index_optimized_by_swe1_5(const std::vector<float>& vectors, const std::vector<int64_t>& ids) {
-    assert(dimension_ != 0);
-    assert(vectors.size() / dimension_ == ids.size());
-    
-    const int64_t num_vectors = ids.size();
-    const int64_t n_train = std::min(static_cast<int64_t>(clustering_->k) * 64, num_vectors);
-    
-    // 1. Optimized training vector sampling with pre-allocation
-    std::vector<float> train_vectors = sample_training_vectors_optimized(vectors, n_train);
-    const int64_t actual_n_train = train_vectors.size() / dimension_;
-    
-    // 2. Train clustering
-    clustering_->train(train_vectors, actual_n_train);
-    global_centroids_ = clustering_->centroids;
-    const int64_t num_centroids = global_centroids_.size() / dimension_;
-    
-    // Pre-allocate centroid IDs
-    global_centroid_ids_.resize(num_centroids);
-    std::iota(global_centroid_ids_.begin(), global_centroid_ids_.end(), 0);
-    
-    // 3. Optimized posting construction with pre-allocation and batch processing
-    std::vector<std::vector<int64_t>> centroid_to_vectors(num_centroids);
-    std::vector<std::vector<int64_t>> centroid_to_ids(num_centroids);
-    
-    // Pre-allocate space for each centroid based on expected load
-    const int64_t avg_vectors_per_centroid = num_vectors / num_centroids + 1;
-    for (int64_t i = 0; i < num_centroids; ++i) {
-        centroid_to_vectors[i].reserve(avg_vectors_per_centroid);
-        centroid_to_ids[i].reserve(avg_vectors_per_centroid);
-    }
-    
-    // Batch assign vectors to centroids
-    for (int64_t i = 0; i < num_vectors; ++i) {
-        const int64_t centroid = find_closest_optimized(
-            global_centroids_.data(), 
-            vectors.data() + i * dimension_, 
-            dimension_, 
-            num_centroids
-        );
-        centroid_to_vectors[centroid].push_back(i);
-        centroid_to_ids[centroid].push_back(ids[i]);
-    }
-    
-    // 4. Optimized shard distribution with reduced memory copies
-    for (int64_t centroid = 0; centroid < num_centroids; ++centroid) {
-        if (centroid_to_vectors[centroid].empty()) continue;
-        
-        const int shard_id = centroid % shard_counts_;
-        
-        // Create inverted list with pre-allocated capacity
-        InvertedList inv_list;
-        const size_t list_size = centroid_to_vectors[centroid].size();
-        inv_list.vectors.reserve(list_size * dimension_);
-        inv_list.vector_ids.reserve(list_size);
-        
-        // Batch copy vectors and IDs
-        for (size_t i = 0; i < list_size; ++i) {
-            const int64_t vector_idx = centroid_to_vectors[centroid][i];
-            inv_list.vectors.insert(inv_list.vectors.end(),
-                                  vectors.begin() + vector_idx * dimension_,
-                                  vectors.begin() + (vector_idx + 1) * dimension_);
-            inv_list.vector_ids.push_back(centroid_to_ids[centroid][i]);
-        }
-        
-        shards_[shard_id]->add_posting(centroid, std::move(inv_list));
-    }
-    
-    is_trained_ = true;
-}
-
 void DistributedIndexIVF::build_index_optimized_by_codex5_3(
     const std::vector<float>& vectors,
     const std::vector<int64_t>& ids) {
@@ -125,7 +55,7 @@ void DistributedIndexIVF::build_index_optimized_by_codex5_3(
 
     // 1) Sampling + clustering training
     const int64_t n_train = std::min(static_cast<int64_t>(clustering_->k) * 64, num_vectors);
-    std::vector<float> train_vectors = sample_training_vectors_optimized(vectors, n_train);
+    std::vector<float> train_vectors = sample_training_vectors(vectors, n_train);
     const int64_t actual_n_train = static_cast<int64_t>(train_vectors.size() / dimension_);
 
     clustering_->train(train_vectors, actual_n_train);
@@ -214,40 +144,30 @@ void DistributedIndexIVF::build_index(const std::vector<float>& vectors, const s
     is_trained_ = true;
 }
 
-std::vector<float> DistributedIndexIVF::sample_training_vectors(const std::vector<float>& vectors, int64_t n_train) const {
-    // 从vectors中随机选出n_train的d维向量
-    int64_t total_vectors = vectors.size() / dimension_;
-    int64_t actual_n_train = std::min(n_train, total_vectors);
-    
-    // 创建随机索引
-    std::vector<int64_t> indices(total_vectors);
-    std::iota(indices.begin(), indices.end(), 0);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::shuffle(indices.begin(), indices.end(), gen);
-    
-    // 提取随机选择的向量
-    std::vector<float> train_vectors;
-    train_vectors.reserve(actual_n_train * dimension_);
-    for (int64_t i = 0; i < actual_n_train; i++) {
-        int64_t idx = indices[i];
-        train_vectors.insert(train_vectors.end(), 
-                           vectors.begin() + idx * dimension_, 
-                           vectors.begin() + (idx + 1) * dimension_);
-    }
-    
-    return train_vectors;
-}
-
 std::vector<InternalSearchResult> DistributedIndexIVF::search(const std::vector<float>& query, int k, int nprobe) {
     if (nprobe > global_centroid_ids_.size()) {
         nprobe = global_centroid_ids_.size();
     }
     // 从global_vectors中找到nprobe和query最近的向量
+    std::vector<DistanceWithIndex> closest_centroids =
+        find_closest_k_with_distance(&global_centroids_[0], &query[0], dimension_, global_centroid_ids_.size(), nprobe);
 
+    std::vector<InternalSearchResult> results;
+    std::unordered_map<int, std::vector<int64_t>> query_centroids_map;
+    for (const auto& centroid : closest_centroids) {
+        int shard_id = global_centroid_ids_[centroid.index] % shard_counts_;
+        query_centroids_map[shard_id].push_back(global_centroid_ids_[centroid.index]);
+    }
+    for (const auto& [shard_id, centroids] : query_centroids_map) {
+        auto shard_result = shards_[shard_id]->search(centroids, query, k);
+        results.insert(results.end(), shard_result.begin(), shard_result.end());
+    }
+    std::sort(results.begin(), results.end());
+    results.resize(k);
+    return results;
 }
 
-std::vector<float> DistributedIndexIVF::sample_training_vectors_optimized(const std::vector<float>& vectors, int64_t n_train) const {
+std::vector<float> DistributedIndexIVF::sample_training_vectors(const std::vector<float>& vectors, int64_t n_train) const {
     const int64_t total_vectors = vectors.size() / dimension_;
     const int64_t actual_n_train = std::min(n_train, total_vectors);
     

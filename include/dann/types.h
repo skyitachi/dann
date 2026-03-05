@@ -4,8 +4,28 @@
 #include <string>
 #include <cstdint>
 #include <chrono>
+#include <queue>
 
 namespace dann {
+
+struct DistanceWithIndex
+{
+    float distance;
+    int64_t index;
+    DistanceWithIndex(float d = 0.0f, int64_t idx = 0): distance(d), index(idx) {}
+
+    bool operator < (const DistanceWithIndex& other) const
+    {
+        return distance < other.distance;
+    }
+
+    bool operator > (const DistanceWithIndex& other) const
+    {
+        return distance > other.distance;
+    }
+};
+
+using DistanceWithIndexQueue = std::priority_queue<DistanceWithIndex>;
 
 struct InternalSearchResult {
     int64_t id;
@@ -14,6 +34,10 @@ struct InternalSearchResult {
     
     InternalSearchResult(int64_t id = -1, float distance = 0.0f, const std::vector<float>& vector = {})
         : id(id), distance(distance), vector(vector) {}
+    
+    bool operator < (const InternalSearchResult& other) const {
+        return distance < other.distance;
+    }
 };
 
 struct InternalIndexOperation {

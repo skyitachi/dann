@@ -15,4 +15,15 @@ void IndexIVFShard::add_posting(int centroid, const InvertedList &posting) {
   it->second.vector_ids.insert(it->second.vector_ids.end(), posting.vector_ids.begin(), posting.vector_ids.end());
   it->second.vectors.insert(it->second.vectors.end(), posting.vector_ids.begin(), posting.vector_ids.end());
 }
+
+std::vector<InternalSearchResult> IndexIVFShard::search(const std::vector<int64_t>& centroid_ids, const std::vector<float>& queries, int k) {
+  for (const auto& centroid_id : centroid_ids) {
+    auto it = postings_.find(centroid_id);
+    if (it == postings_.end()) {
+      continue;
+    }
+  }
+
+}
+
 } // namespace dann
