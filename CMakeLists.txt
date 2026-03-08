@@ -84,7 +84,7 @@ set(CORE_SOURCES_MINIMAL
     src/core/ivf_index.cpp
     src/core/clustering.cpp
     src/core/distributed_index_ivf.cpp
-        src/core/ivf_shard.cpp
+    src/core/ivf_shard.cpp
 )
 
 # Create minimal core library for testing
@@ -351,7 +351,12 @@ endif()
 
 # Test executable (minimal version without protobuf dependencies)
 #add_executable(dann_test tests/gtest_integration_test.cpp)
-add_executable(dann_test tests/vector_index_test.cpp tests/clustering_test.cpp)
+set(TEST_FILES
+    tests/vector_index_test.cpp
+    tests/clustering_test.cpp
+    tests/distributed_ivf_test.cpp
+)
+add_executable(dann_test ${TEST_FILES})
 
 # Link gtest based on installation method
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")

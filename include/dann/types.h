@@ -40,6 +40,8 @@ struct InternalSearchResult {
     }
 };
 
+using InternalSearchResultQueue = std::priority_queue<InternalSearchResult>;
+
 struct InternalIndexOperation {
     enum Type { ADD, DELETE, UPDATE };
     

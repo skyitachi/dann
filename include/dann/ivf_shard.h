@@ -18,13 +18,14 @@ struct InvertedList
 
 class IndexIVFShard {
 public:
-    IndexIVFShard(int shard_id, std::string node_id);
+    IndexIVFShard(int d, int shard_id, std::string node_id);
     std::vector<InternalSearchResult> search(const std::vector<int64_t>& centroid_ids, const std::vector<float>& queries, int k);
     void add_postings(const std::unordered_map<int64_t, InvertedList>& postings);
     void add_posting(int centroid, const InvertedList& posting);
 private:
     int shard_id_;
     std::string node_id_;
+    int dimension_;
     std::unordered_map<int64_t, InvertedList> postings_;
 
 };

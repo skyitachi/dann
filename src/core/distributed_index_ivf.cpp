@@ -35,7 +35,7 @@ DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int64_t n, int
     // 将shards均分到nodes上
     int node_size = nodes_.size();
     for (int i = 0; i < shard_counts_; i++) {
-        shards_[i] = std::make_unique<IndexIVFShard>(i, nodes_[i % node_size]);
+        shards_[i] = std::make_unique<IndexIVFShard>(d, i, nodes_[i % node_size]);
     }
 }
 
