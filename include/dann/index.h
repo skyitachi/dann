@@ -16,7 +16,8 @@ public:
           int shard_count = 1,
           const std::string& index_type = "IVF",
           int hnsw_m = 16,
-          int hnsw_ef_construction = 100);
+          int hnsw_ef_construction = 100,
+          std::vector<std::string> nodes = {});
 
     const std::string& name() const;
 

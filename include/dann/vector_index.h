@@ -21,10 +21,10 @@ public:
     ~VectorIndex();
     
     // Core operations
-    bool add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids);
+    bool add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids) override;
     bool add_vectors_bulk(const std::vector<float>& vectors, const std::vector<int64_t>& ids, int batch_size = 1000);
     
-    std::vector<InternalSearchResult> search(const std::vector<float>& query, int k = 10);
+    std::vector<InternalSearchResult> search(const std::vector<float>& query, int k = 10) override;
     std::vector<InternalSearchResult> search_batch(const std::vector<float>& queries, int k = 10);
     
     bool remove_vector(int64_t id);
@@ -32,13 +32,13 @@ public:
     
     // Index management
     bool save_index(const std::string& file_path);
-    bool load_index(const std::string& file_path);
+    bool load_index(const std::string& file_path) override;
     void reset_index();
     
     // Metadata
-    size_t size() const;
-    int dimension() const;
-    std::string index_type() const;
+    size_t size() override;
+    int dimension() const override;
+    std::string index_type() const override;
     
     // Consistency support
     uint64_t get_version() const;

@@ -601,7 +601,7 @@ TEST_F(VectorIndexTest, Playground)
 
 TEST_F(VectorIndexTest, BasicDistributedIVFIndexTest) {
     DistributedIndexIVF distributed_index_ivf("test_dis_ivf", dimension_,
-        test_ids_.size(), 3, {"node1"});
+        3, {"node1"});
 
     distributed_index_ivf.build_index(test_vectors_, test_ids_);
 }

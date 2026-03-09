@@ -15,7 +15,7 @@ class IndexShard;
 class IndexShardFactory {
 
 public:
-  void init(std::string name, std::string index_type, int dim, int shards, int ef, int ef_construction,
+  std::shared_ptr<IndexShard> create(std::string name, std::string index_type, int dim, int shards, int ef, int ef_construction,
     faiss::MetricType metric = faiss::METRIC_L2, std::vector<std::string> nodes_ = {});
   std::shared_ptr<IndexShard> get_index(std::string index_type);
 
@@ -23,11 +23,9 @@ private:
   std::map<std::string, std::shared_ptr<IndexShard>> index_map_;
 
 };
-namespace {
-  IndexShardFactory index_shard_factory;
-}
-IndexShardFactory* get_global_index_factory() {
+inline IndexShardFactory index_shard_factory;
+inline IndexShardFactory* get_global_index_factory() {
   return &index_shard_factory;
-};
+}
 }
 #endif // DANN_INDEX_FACTORY_H

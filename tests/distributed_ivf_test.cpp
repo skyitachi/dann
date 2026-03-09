@@ -2,6 +2,7 @@
 // Created by skyitachi on 2026/3/8.
 //
 #include <gtest/gtest.h>
+#include "dann/distributed_index_ivf.h"
 #include "dann/ivf_shard.h"
 #include "dann/types.h"
 
@@ -240,4 +241,65 @@ TEST_F(IndexIVFShardTest, SearchWithKGreaterThanDataSize) {
 
   auto results = shard.search(centroid_ids, query, 10);
   EXPECT_EQ(results.size(), 3);  // Should return all 3, not 10
+}
+
+class DistributedIndexIVFTest : public ::testing::Test {
+protected:
+  void SetUp() override {
+    d_ = 8;  // hit optimized distance branch in implementation
+    shards_ = 4;
+    nodes_ = {"node_0", "node_1"};
+  }
+
+  void generate_clustered_data(int n, std::vector<float>& vectors, std::vector<int64_t>& ids) const {
+    vectors.clear();
+    ids.clear();
+    vectors.reserve(static_cast<size_t>(n) * d_);
+    ids.reserve(static_cast<size_t>(n));
+
+    for (int i = 0; i < n; ++i) {
+      const float base = static_cast<float>(i / 10) * 20.0f;
+      for (int j = 0; j < d_; ++j) {
+        vectors.push_back(base + static_cast<float>(j) * 0.01f);
+      }
+      ids.push_back(static_cast<int64_t>(i));
+    }
+  }
+
+  int d_;
+  int shards_;
+  std::vector<std::string> nodes_;
+};
+
+TEST_F(DistributedIndexIVFTest, BuildAndSearchReturnsResults) {
+  dann::DistributedIndexIVF index("distributed_ivf", d_, shards_, nodes_);
+
+  std::vector<float> vectors;
+  std::vector<int64_t> ids;
+  generate_clustered_data(200, vectors, ids);
+
+  ASSERT_TRUE(index.add_vectors(vectors, ids));
+
+  std::vector<float> query(vectors.begin(), vectors.begin() + d_);
+  const int k = 10;
+  auto results = index.search(query, k);
+
+  ASSERT_EQ(results.size(), static_cast<size_t>(k));
+  EXPECT_EQ(results[0].distance, 0.0f);
+  EXPECT_GE(results[0].id, 0);
+  EXPECT_LE(results[0].id, 9);
+  for (size_t i = 1; i < results.size(); ++i) {
+    EXPECT_LE(results[i - 1].distance, results[i].distance);
+  }
+}
+
+TEST_F(DistributedIndexIVFTest, IndexMetadataIsCorrect) {
+  dann::DistributedIndexIVF index("distributed_ivf_meta", d_, shards_, nodes_);
+  EXPECT_EQ(index.dimension(), d_);
+  EXPECT_EQ(index.index_type(), "IVF");
+}
+
+TEST_F(DistributedIndexIVFTest, LoadIndexReturnsFalse) {
+  dann::DistributedIndexIVF index("distributed_ivf_load", d_, shards_, nodes_);
+  EXPECT_FALSE(index.load_index("/tmp/not_implemented.ivf"));
 }

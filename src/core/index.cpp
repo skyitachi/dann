@@ -1,4 +1,5 @@
 #include "dann/index.h"
+#include "dann/index_factory.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -10,18 +11,28 @@ Index::Index(std::string name,
              int shard_count,
              const std::string& index_type,
              int hnsw_m,
-             int hnsw_ef_construction)
+             int hnsw_ef_construction,
+             std::vector<std::string> nodes)
     : name_(std::move(name)), dimension_(dimension) {
     if (dimension_ <= 0) {
         throw std::invalid_argument("Dimension must be greater than 0");
     }
     if (shard_count <= 0) {
         throw std::invalid_argument("Shard count must be greater than 0");
-    }
+    }    
 
     shards_.reserve(static_cast<size_t>(shard_count));
+
+    IndexShardFactory* global_shard_factory = get_global_index_factory();
+
+    if (index_type == "IVF") {
+        shards_.push_back(global_shard_factory->create(name, index_type, dimension, shard_count, hnsw_m, hnsw_ef_construction, faiss::METRIC_L2, nodes));
+        return;
+    }
     for (int i = 0; i < shard_count; ++i) {
-        shards_.push_back(std::make_shared<IndexShard>(dimension_, index_type, hnsw_m, hnsw_ef_construction));
+        shards_.push_back(global_shard_factory->create(name,
+            index_type, dimension, shard_count,
+            hnsw_m, hnsw_ef_construction, faiss::METRIC_L2, nodes));
     }
 }
 

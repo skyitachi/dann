@@ -23,8 +23,11 @@ public:
     bool add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids) override;
     void build_index(const std::vector<float>& vectors, const std::vector<int64_t>& ids);
     std::vector<InternalSearchResult> search(const std::vector<float>& query, int k) override;
-    std::string index_type() override;
+    std::string index_type() const override;
     size_t size() override { return 0; }
+    int dimension() const override;
+    bool load_index(const std::string &index_path) override;
+    ~DistributedIndexIVF() = default;
 
 private:
     std::vector<float> sample_training_vectors(const std::vector<float>& vectors, int64_t n_train) const;

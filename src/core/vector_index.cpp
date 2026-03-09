@@ -189,7 +189,7 @@ void VectorIndex::reset_index() {
     ++version_;
 }
 
-size_t VectorIndex::size() const {
+size_t VectorIndex::size() {
     return index_ ? static_cast<size_t>(index_->ntotal) : 0;
 }
 
