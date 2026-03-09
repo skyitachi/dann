@@ -2,6 +2,8 @@
 // Created by skyitachi on 2026/2/22.
 //
 #include "dann/utils.h"
+
+#include <algorithm>
 #include <queue>
 
 namespace dann

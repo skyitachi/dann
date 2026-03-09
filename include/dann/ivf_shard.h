@@ -4,8 +4,8 @@
 
 #ifndef DANN_INF_SHARD_H
 #define DANN_INF_SHARD_H
-#include "dann/types.h"
 #include <unordered_map>
+#include "dann/types.h"
 
 namespace dann
 {
@@ -21,7 +21,7 @@ public:
     IndexIVFShard(int d, int shard_id, std::string node_id);
     std::vector<InternalSearchResult> search(const std::vector<int64_t>& centroid_ids, const std::vector<float>& queries, int k);
     void add_postings(const std::unordered_map<int64_t, InvertedList>& postings);
-    void add_posting(int centroid, const InvertedList& posting);
+    void add_posting(int64_t centroid, const InvertedList& posting);
 private:
     int shard_id_;
     std::string node_id_;

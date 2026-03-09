@@ -9,10 +9,10 @@
 #include <faiss/Index.h>
 #include <faiss/index_io.h>
 #include "dann/types.h"
-
+#include "dann/index_shard.h"
 namespace dann {
 
-class VectorIndex {
+class VectorIndex: public IndexShard {
 public:
     VectorIndex(int dimension,
                 const std::string& index_type = "IVF",

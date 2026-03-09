@@ -21,7 +21,7 @@ Index::Index(std::string name,
 
     shards_.reserve(static_cast<size_t>(shard_count));
     for (int i = 0; i < shard_count; ++i) {
-        shards_.push_back(std::make_shared<VectorIndex>(dimension_, index_type, hnsw_m, hnsw_ef_construction));
+        shards_.push_back(std::make_shared<IndexShard>(dimension_, index_type, hnsw_m, hnsw_ef_construction));
     }
 }
 
@@ -77,20 +77,6 @@ bool Index::add_vectors(const std::vector<float>& vectors, const std::vector<int
     return ok;
 }
 
-bool Index::add_vectors_bulk(const std::vector<float>& vectors,
-                             const std::vector<int64_t>& ids,
-                             int batch_size) {
-    if (batch_size <= 0) {
-        return false;
-    }
-
-    if (shards_.size() == 1) {
-        return shards_[0]->add_vectors_bulk(vectors, ids, batch_size);
-    }
-
-    return add_vectors(vectors, ids);
-}
-
 std::vector<InternalSearchResult> Index::search(const std::vector<float>& query, int k) {
     std::vector<InternalSearchResult> merged;
     if (k <= 0) {
@@ -111,30 +97,6 @@ std::vector<InternalSearchResult> Index::search(const std::vector<float>& query,
     }
 
     return merged;
-}
-
-bool Index::remove_vector(int64_t id) {
-    if (shards_.empty()) {
-        return false;
-    }
-
-    const int shard_id = shard_id_for_document(id);
-    return shards_[static_cast<size_t>(shard_id)]->remove_vector(id);
-}
-
-bool Index::update_vector(int64_t id, const std::vector<float>& new_vector) {
-    if (shards_.empty()) {
-        return false;
-    }
-
-    const int shard_id = shard_id_for_document(id);
-    return shards_[static_cast<size_t>(shard_id)]->update_vector(id, new_vector);
-}
-
-void Index::reset() {
-    for (const auto& shard : shards_) {
-        shard->reset_index();
-    }
 }
 
 size_t Index::size() const {
@@ -160,7 +122,7 @@ int Index::shard_count() const {
     return static_cast<int>(shards_.size());
 }
 
-std::shared_ptr<VectorIndex> Index::shard(int shard_id) const {
+std::shared_ptr<IndexShard> Index::shard(int shard_id) const {
     if (shard_id < 0 || shard_id >= static_cast<int>(shards_.size())) {
         return nullptr;
     }

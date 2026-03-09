@@ -5,12 +5,13 @@
 
 #include "dann/logger.h"
 #include "dann/utils.h"
+#include <algorithm>
 
 namespace dann {
 IndexIVFShard::IndexIVFShard(int d, int shard_id, std::string node_id):
   dimension_(d), shard_id_(shard_id), node_id_(std::move(node_id)) {}
 
-void IndexIVFShard::add_posting(int centroid, const InvertedList &posting) {
+void IndexIVFShard::add_posting(int64_t centroid, const InvertedList &posting) {
   auto it = postings_.find(centroid);
   if (it == postings_.end()) {
     postings_[centroid] = InvertedList();
@@ -51,6 +52,12 @@ std::vector<InternalSearchResult> IndexIVFShard::search(const std::vector<int64_
   }
   std::reverse(result.begin(), result.end());
   return result;
+}
+
+void IndexIVFShard::add_postings( const std::unordered_map<int64_t, InvertedList> &postings) {
+  for (const auto& [c, inv]: postings) {
+    add_posting(c, inv);
+  }
 }
 
 } // namespace dann

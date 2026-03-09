@@ -28,10 +28,20 @@ int64_t get_nlist(int64_t N) {
     return nlist;
 }
 
-DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int64_t n, int shards, std::vector<std::string> nodes):
-    name_(std::move(name)), dimension_(d), ntotal_(n), shard_counts_(shards), nodes_(std::move(nodes)), is_trained_(false) {
+// 推荐的nprobe设置策略
+int determine_nprobe(int nlist, int recall_target) {
+    if (recall_target >= 0.95) {
+        return std::min(nlist / 4, 256);  // 高召回率
+    } else if (recall_target >= 0.90) {
+        return std::min(nlist / 8, 128);  // 中等召回率
+    } else {
+        return std::min(nlist / 16, 64);  // 平衡性能
+    }
+}
+
+DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int shards, std::vector<std::string> nodes):
+    name_(std::move(name)), dimension_(d), shard_counts_(shards), nodes_(std::move(nodes)), is_trained_(false) {
     assert(shard_counts_ >= nodes.size() && shard_counts_ > 0);
-    clustering_ = std::make_unique<Clustering>(d, get_nlist(n));
     // 将shards均分到nodes上
     int node_size = nodes_.size();
     for (int i = 0; i < shard_counts_; i++) {
@@ -39,13 +49,15 @@ DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int64_t n, int
     }
 }
 
-void DistributedIndexIVF::build_index_optimized_by_codex5_3(
-    const std::vector<float>& vectors,
+void DistributedIndexIVF::build_index(const std::vector<float>& vectors,
     const std::vector<int64_t>& ids) {
     assert(dimension_ != 0);
     assert(vectors.size() / dimension_ == ids.size());
 
     const int64_t num_vectors = static_cast<int64_t>(ids.size());
+    clustering_ = std::make_unique<Clustering>(dimension_, get_nlist(num_vectors));
+    nprobe_ = determine_nprobe(clustering_->k, 0.90f);
+
     if (num_vectors == 0) {
         global_centroids_.clear();
         global_centroid_ids_.clear();
@@ -109,42 +121,14 @@ void DistributedIndexIVF::build_index_optimized_by_codex5_3(
     is_trained_ = true;
 }
 
-void DistributedIndexIVF::build_index(const std::vector<float>& vectors, const std::vector<int64_t>& ids) {
-    assert(dimension_ != 0);
-    assert(vectors.size() / dimension_ == ids.size());
-    int64_t n_train = clustering_->k * 64;
-
-    // 从vectors中随机选出n_train的d维向量
-    std::vector<float> train_vectors = sample_training_vectors(vectors, n_train);
-    int64_t actual_n_train = train_vectors.size() / dimension_;
-
-    // 1. 训练好聚类中心
-    clustering_->train(train_vectors, actual_n_train);
-    global_centroids_ = clustering_->centroids;
-    global_centroid_ids_.reserve(global_centroids_.size() / dimension_);
-    std::iota(global_centroid_ids_.begin(), global_centroid_ids_.end(), 0);
-
-    // 2. 构建global postings
-    std::unordered_map<int64_t, InvertedList> postings;
-    for (int i = 0; i < ids.size(); i++) {
-        int64_t centroid = find_closest(&global_centroids_[0], &vectors[i * dimension_], dimension_, global_centroid_ids_.size());
-        auto it = postings.find(global_centroid_ids_[centroid]);
-        if (it == postings.end()) {
-            postings[centroid] = InvertedList();
-            it = postings.find(centroid);
-        }
-        it->second.vectors.insert(it->second.vectors.end(), vectors.begin() + i * dimension_, vectors.begin() + (i + 1) * dimension_);
-        it->second.vector_ids.push_back(ids.at(i));
-    }
-    // 3. 将全局postings 均分到shards上
-    for (const auto& [centroid, inv]: postings) {
-        int shard_id = centroid % shard_counts_;
-        shards_[shard_id]->add_posting(centroid, inv);
-    }
-    is_trained_ = true;
+bool DistributedIndexIVF::add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids) {
+    build_index(vectors, ids);
+    return true;
 }
 
-std::vector<InternalSearchResult> DistributedIndexIVF::search(const std::vector<float>& query, int k, int nprobe) {
+std::vector<InternalSearchResult> DistributedIndexIVF::search(const std::vector<float>& query, int k) {
+    int nprobe = nprobe_;
+
     if (nprobe > global_centroid_ids_.size()) {
         nprobe = global_centroid_ids_.size();
     }

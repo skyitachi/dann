@@ -2,12 +2,12 @@
 
 #include <grpc/grpc.h>
 #include <grpcpp/grpcpp.h>
-#include "dann/index.h"
 #include "vector_service.pb.h"
 #include "vector_service.grpc.pb.h"
-#include "dann/types.h"
-#include <memory>
+#include "dann/index.h"
+#include "dann/distributed_index_ivf.h"
 
+#include <memory>
 namespace dann {
 
 class VectorSearchServiceImpl final : public dann::VectorSearchService::Service {

@@ -132,6 +132,11 @@ void run_demo(const Config& config) {
     std::cout << "\n";
     
     // Create components
+    if (config.index_type == "ivf") {
+
+    } else {
+
+    }
     auto index = std::make_shared<Index>("default", config.dimension, config.shard_count, config.index_type);
     if (!config.index_path.empty()) {
         // Currently only supported for single-shard setups.
