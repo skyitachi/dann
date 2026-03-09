@@ -1,0 +1,53 @@
+=== DANN benchmark 30秒CPU性能分析报告 ===
+
+采样数据:
+- 采样周期: 30秒
+- 总样本数: 117,363
+- 总CPU周期: ~136.1B cycles
+- 数据文件: perf_dann_30s.data (944.6 MB)
+
+=== 主要性能瓶颈 ===
+
+1. L2_distance (98.63% CPU时间)
+   - 问题: 占据了绝大部分CPU时间
+   - 位置: clustering训练阶段
+   - 原因: K-means算法需要大量距离计算
+
+2. Clustering::train (0.80% 自时间)
+   - 包含: 97.84% 的L2_distance调用
+   - 问题: 聚类训练阶段性能瓶颈
+
+=== 调用栈分析 ===
+
+main 
+→ DistributedIndexIVF::add_vectors
+→ DistributedIndexIVF::build_index  
+→ Clustering::train
+→ L2_distance (97.84%)
+
+=== 优化建议 ===
+
+1. 向量化优化:
+   - 使用SIMD指令优化L2_distance
+   - 参考: src/utils/util.cpp:12
+
+2. 减少距离计算:
+   - 增加nlist数量，减少k-means迭代次数
+   - 使用更少的训练样本 (nlist * 30)
+
+3. 并行化:
+   - Clustering::train使用OpenMP并行计算
+   - 当前已有OpenMP，但在L2_distance中未充分利用
+
+4. 算法优化:
+   - 使用三角不等式剪枝
+   - 使用FAISS的量化索引
+
+=== 进一步分析 ===
+
+交互式查看: perf report -i perf_dann_30s.data
+
+查看热点函数: perf report -i perf_dann_30s.data --stdio
+
+生成火焰图: 
+perf script -i perf_dann_30s.data | FlameGraph/stackcollapse-perf.pl | FlameGraph/flamegraph.pl > flamegraph.svg

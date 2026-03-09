@@ -13,6 +13,7 @@
 #include <limits>
 #include <memory>
 #include <cassert>
+#include <chrono>
 
 namespace dann {
 
@@ -44,6 +45,8 @@ void Clustering::train(const std::vector<float>& vectors, size_t n) {
         std::vector<float> prev_centroids(d * k);
         float convergence_threshold = 1e-6f;
         for (int t = 0; t < niter; t++) {
+            auto iter_start = std::chrono::high_resolution_clock::now();
+            
             prev_centroids = centroids;
             // 2.1 计算每个向量到最近的质心
             for (int i = 0; i < n; i++) {
@@ -87,9 +90,18 @@ void Clustering::train(const std::vector<float>& vectors, size_t n) {
                     float change = L2_distance(&prev_centroids[i * d], &centroids[i * d], d);
                     max_change = std::max(max_change, change);
                 }
+                
+                auto iter_end = std::chrono::high_resolution_clock::now();
+                auto iter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(iter_end - iter_start);
+                LOG_INFOF("Clustering iteration %d: max_change=%.6f, duration=%ld ms", t, max_change, iter_duration.count());
+                
                 if (max_change < convergence_threshold) {
                     break;
                 }
+            } else {
+                auto iter_end = std::chrono::high_resolution_clock::now();
+                auto iter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(iter_end - iter_start);
+                LOG_INFOF("Clustering iteration %d: duration=%ld ms", t, iter_duration.count());
             }
         }
     }

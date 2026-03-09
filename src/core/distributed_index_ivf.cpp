@@ -11,6 +11,7 @@
 
 #include "dann/distributed_index_ivf.h"
 
+#include "dann/logger.h"
 #include "dann/utils.h"
 
 namespace dann {
@@ -51,6 +52,20 @@ namespace dann {
             shards_[i] = std::make_unique<IndexIVFShard>(d, i, nodes_[i % node_size]);
         }
     }
+DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int shards, int nlist, int nprobe,
+                                         std::vector<std::string> nodes): name_(std::move(name)), dimension_(d),
+                                                                          shard_counts_(shards),
+                                                                          nlist_(nlist),
+                                                                          nprobe_(nprobe),
+                                                                          nodes_(std::move(nodes)),
+                                                                          is_trained_(false) {
+        assert(shard_counts_ >= nodes.size() && shard_counts_ > 0);
+        // 将shards均分到nodes上
+        int node_size = nodes_.size();
+        for (int i = 0; i < shard_counts_; i++) {
+            shards_[i] = std::make_unique<IndexIVFShard>(d, i, nodes_[i % node_size]);
+        }
+    }
 
     int DistributedIndexIVF::dimension() const {
         return dimension_;
@@ -71,8 +86,12 @@ namespace dann {
         assert(vectors.size() / dimension_ == ids.size());
 
         const int64_t num_vectors = static_cast<int64_t>(ids.size());
-        clustering_ = std::make_unique<Clustering>(dimension_, get_nlist(num_vectors));
-        nprobe_ = determine_nprobe(clustering_->k, 0.90f);
+        if (nlist_ < 0) {
+            nlist_ = get_nlist(num_vectors);
+        }
+        clustering_ = std::make_unique<Clustering>(dimension_, nlist_);
+        nprobe_ = determine_nprobe(nlist_, 0.90f);
+        LOG_INFOF("clustering->k=%d, nprobe=%d", clustering_->k, nprobe_);
 
         if (num_vectors == 0) {
             global_centroids_.clear();
@@ -85,6 +104,7 @@ namespace dann {
         const int64_t n_train = std::min(static_cast<int64_t>(clustering_->k) * 64, num_vectors);
         std::vector<float> train_vectors = sample_training_vectors(vectors, n_train);
         const int64_t actual_n_train = static_cast<int64_t>(train_vectors.size() / dimension_);
+        LOG_INFOF("clustering->k=%d, nprobe=%d, ntrain=%ld, actual_n_train=%ld", clustering_->k, nprobe_, n_train, actual_n_train);
 
         clustering_->train(train_vectors, actual_n_train);
         global_centroids_ = clustering_->centroids;

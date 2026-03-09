@@ -85,7 +85,7 @@ set(CORE_SOURCES_MINIMAL
     src/core/clustering.cpp
     src/core/distributed_index_ivf.cpp
     src/core/ivf_shard.cpp
-        src/core/index_factory.cpp
+    src/core/index_factory.cpp
 )
 
 # Create minimal core library for testing
@@ -115,9 +115,9 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if(APPLE)
-    target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate")
+    target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate" dann_utils)
 else()
-    target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES})
+    target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES} dann_utils)
 endif()
 
 # Network layer sources
@@ -145,6 +145,13 @@ set(UTILS_SOURCES
 
 # Create utils library
 add_library(dann_utils STATIC ${UTILS_SOURCES})
+
+# Link FAISS to dann_utils
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/faiss/install")
+    target_link_libraries(dann_utils ${FAISS_LIB_DIR}/libfaiss.a)
+else()
+    target_link_libraries(dann_utils ${FAISS_LIBRARIES})
+endif()
 #target_link_libraries(dann_utils spdlog)
 
 
@@ -208,6 +215,9 @@ if(Protobuf_FOUND AND gRPC_FOUND)
     )
 
     add_library(myproto ${PROTO_FILES})
+
+    # Ensure proto output directory exists
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/proto)
 
     set_target_properties(myproto PROPERTIES LINKER_LANGUAGE CXX)
 
@@ -406,4 +416,80 @@ if(Protobuf_FOUND AND gRPC_FOUND)
         find_package(ZLIB REQUIRED)
         target_link_libraries(test_grpc_client PRIVATE ZLIB::ZLIB)
     endif()
+endif()
+
+# Benchmark executables
+find_package(HDF5 REQUIRED COMPONENTS CXX)
+
+# Faiss benchmark
+add_executable(faiss_bench benchmark/faiss_bench.cpp)
+
+# Link OpenMP support for macOS
+if(APPLE)
+    target_compile_options(faiss_bench PRIVATE -Xpreprocessor -fopenmp)
+    target_include_directories(faiss_bench PRIVATE /opt/homebrew/opt/libomp/include)
+else()
+    target_compile_options(faiss_bench PRIVATE ${OpenMP_CXX_FLAGS})
+    target_include_directories(faiss_bench PRIVATE ${OpenMP_CXX_INCLUDE_DIRS})
+endif()
+
+target_include_directories(faiss_bench PRIVATE ${HDF5_INCLUDE_DIRS})
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/faiss/install")
+    target_link_libraries(faiss_bench ${FAISS_LIB_DIR}/libfaiss.a)
+else()
+    target_link_libraries(faiss_bench ${FAISS_LIBRARIES})
+endif()
+
+if(UNIX AND NOT APPLE)
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+    target_link_libraries(faiss_bench ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+endif()
+
+if(APPLE)
+    target_link_libraries(faiss_bench ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate")
+else()
+    target_link_libraries(faiss_bench ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES})
+endif()
+
+target_link_libraries(faiss_bench ${HDF5_CXX_LIBRARIES})
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(faiss_bench ZLIB::ZLIB)
+endif()
+
+# DANN benchmark
+add_executable(dann_bench benchmark/dann_bench.cpp)
+
+# Link OpenMP support for macOS
+if(APPLE)
+    target_compile_options(dann_bench PRIVATE -Xpreprocessor -fopenmp)
+    target_include_directories(dann_bench PRIVATE /opt/homebrew/opt/libomp/include)
+else()
+    target_compile_options(dann_bench PRIVATE ${OpenMP_CXX_FLAGS})
+    target_include_directories(dann_bench PRIVATE ${OpenMP_CXX_INCLUDE_DIRS})
+endif()
+
+target_include_directories(dann_bench PRIVATE ${HDF5_INCLUDE_DIRS})
+target_link_libraries(dann_bench dann_core_minimal)
+
+if(UNIX AND NOT APPLE)
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+    target_link_libraries(dann_bench ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+endif()
+
+if(APPLE)
+    target_link_libraries(dann_bench ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate")
+else()
+    target_link_libraries(dann_bench ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES})
+endif()
+
+target_link_libraries(dann_bench ${HDF5_CXX_LIBRARIES})
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(dann_bench ZLIB::ZLIB)
 endif()

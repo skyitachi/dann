@@ -20,6 +20,7 @@ namespace dann
 class DistributedIndexIVF: public IndexShard {
 public:
     DistributedIndexIVF(std::string name, int d, int shards, std::vector<std::string> nodes);
+    DistributedIndexIVF(std::string name, int d, int shards, int nlist, int nprobe, std::vector<std::string> nodes);
     bool add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids) override;
     void build_index(const std::vector<float>& vectors, const std::vector<int64_t>& ids);
     std::vector<InternalSearchResult> search(const std::vector<float>& query, int k) override;
@@ -39,6 +40,7 @@ private:
     // number of vectors initially
     int64_t ntotal_;
     int shard_counts_;
+    int nlist_{-1};
     int nprobe_;
 
     std::unique_ptr<Clustering> clustering_;

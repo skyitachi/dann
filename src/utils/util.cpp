@@ -5,17 +5,13 @@
 
 #include <algorithm>
 #include <queue>
+#include <faiss/utils/distances.h>
 
 namespace dann
 {
 
 float L2_distance(const float* x, const float* y, int d) {
-    float dist = 0.0f;
-    for (int i = 0; i < d; i++) {
-        float diff = x[i] - y[i];
-        dist += diff * diff;
-    }
-    return dist;
+    return faiss::fvec_L2sqr(x, y, d);
 }
 
 int64_t find_closest(const float *x, const float* y, int d, int n) {
