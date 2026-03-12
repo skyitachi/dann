@@ -515,12 +515,12 @@ endif()
 
 # Link everything manually in the correct order for static libraries
 if(UNIX AND NOT APPLE)
-    target_link_libraries(dann_bench 
+    target_link_libraries(dann_bench
         # Static libraries in dependency order
         dann_core_minimal
         ${FAISS_LIB_DIR}/libfaiss.a
-        /usr/lib/gcc/x86_64-linux-gnu/15/libgomp.a
         ${CMAKE_THREAD_LIBS_INIT}
+        OpenMP::OpenMP_CXX
         # Shared libraries last
         ${HDF5_CXX_LIBRARIES}
     )
