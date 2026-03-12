@@ -52,7 +52,8 @@ namespace dann {
             shards_[i] = std::make_unique<IndexIVFShard>(d, i, nodes_[i % node_size]);
         }
     }
-DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int shards, int nlist, int nprobe,
+
+    DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int shards, int nlist, int nprobe,
                                          std::vector<std::string> nodes): name_(std::move(name)), dimension_(d),
                                                                           shard_counts_(shards),
                                                                           nlist_(nlist),

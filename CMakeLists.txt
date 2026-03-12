@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.31.0)
+if (EXISTS "/home/skyitachi/utility/vcpkg/scripts/buildsystems/vcpkg.cmake")
+    set(CMAKE_TOOLCHAIN_FILE /home/skyitachi/utility/vcpkg/scripts/buildsystems/vcpkg.cmake)
+endif ()
 project(DANN VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -100,24 +103,27 @@ else()
     target_include_directories(dann_core_minimal PRIVATE ${OpenMP_CXX_INCLUDE_DIRS})
 endif()
 
-# Link FAISS based on installation method
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/faiss/install")
-    target_link_libraries(dann_core_minimal ${FAISS_LIB_DIR}/libfaiss.a)
+# Link OpenMP libraries first, then FAISS
+if(APPLE)
+    target_link_libraries(dann_core_minimal 
+        ${CMAKE_THREAD_LIBS_INIT} 
+        /opt/homebrew/opt/libomp/lib/libomp.dylib 
+        "-framework Accelerate" 
+        dann_utils)
 else()
-    target_link_libraries(dann_core_minimal ${FAISS_LIBRARIES})
+    target_link_libraries(dann_core_minimal 
+        ${CMAKE_THREAD_LIBS_INIT} 
+        OpenMP::OpenMP_CXX 
+        dann_utils)
 endif()
+
+# Don't link FAISS to core_minimal - we'll link it in the final executable with proper ordering
 
 # Add BLAS/LAPACK for Linux systems
 if(UNIX AND NOT APPLE)
     find_package(BLAS REQUIRED)
     find_package(LAPACK REQUIRED)
     target_link_libraries(dann_core_minimal ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
-endif()
-
-if(APPLE)
-    target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate" dann_utils)
-else()
-    target_link_libraries(dann_core_minimal ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES} dann_utils)
 endif()
 
 # Network layer sources
@@ -146,31 +152,34 @@ set(UTILS_SOURCES
 # Create utils library
 add_library(dann_utils STATIC ${UTILS_SOURCES})
 
+# Link OpenMP libraries first, then FAISS
+if(APPLE)
+    target_link_libraries(dann_utils /opt/homebrew/opt/libomp/lib/libomp.dylib)
+else()
+    target_link_libraries(dann_utils OpenMP::OpenMP_CXX)
+endif()
+
 # Link FAISS to dann_utils
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/faiss/install")
     target_link_libraries(dann_utils ${FAISS_LIB_DIR}/libfaiss.a)
 else()
     target_link_libraries(dann_utils ${FAISS_LIBRARIES})
 endif()
+
+# Add BLAS/LAPACK for Linux systems to dann_utils
+if(UNIX AND NOT APPLE)
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+    target_link_libraries(dann_utils ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+endif()
+
 #target_link_libraries(dann_utils spdlog)
 
 
-# Try to find gRPC and protobuf (optional)
-# Use multiple approaches to avoid target conflicts
-
-# Approach 1: Try pkg-config first (most reliable)
-find_package(PkgConfig QUIET)
-if(PKG_CONFIG_FOUND)
-    pkg_check_modules(GRPC QUIET grpc++)
-    pkg_check_modules(PROTOBUF QUIET protobuf)
-
-    if(GRPC_FOUND AND PROTOBUF_FOUND)
-        message(STATUS "Building with gRPC support (pkg-config)")
-        set(GRPC_FOUND_PKGCONFIG TRUE)
-        set(Protobuf_FOUND TRUE)
-        set(gRPC_FOUND TRUE)
-    endif()
-endif()
+# Skip gRPC and protobuf for now to focus on benchmarks
+message(STATUS "Skipping gRPC/protobuf search for benchmark build")
+set(gRPC_FOUND FALSE)
+set(Protobuf_FOUND FALSE)
 
 # Approach 2: Try Homebrew with explicit paths (if pkg-config failed)
 if(NOT gRPC_FOUND AND EXISTS "/opt/homebrew")
@@ -203,9 +212,8 @@ endif()
 # Main executable
 add_executable(dann_server src/main.cpp)
 target_link_libraries(dann_server 
-    PRIVATE
-        dann_core_minimal 
-        dann_utils
+    dann_core_minimal 
+    dann_utils
 )
 
 if(Protobuf_FOUND AND gRPC_FOUND)
@@ -335,7 +343,7 @@ if(Protobuf_FOUND AND gRPC_FOUND)
 
     # Ensure dann_server can include generated headers (vector_service.pb.h / .grpc.pb.h)
     # by inheriting myproto's generated include dirs.
-    target_link_libraries(dann_server PRIVATE myproto)
+    target_link_libraries(dann_server myproto)
 
     if(GRPC_FOUND_PKGCONFIG)
         target_include_directories(dann_server PRIVATE ${GRPC_INCLUDE_DIRS} ${PROTOBUF_INCLUDE_DIRS})
@@ -369,12 +377,26 @@ set(TEST_FILES
 )
 add_executable(dann_test ${TEST_FILES})
 
+# Link OpenMP libraries first, then gtest
+if(APPLE)
+    target_link_libraries(dann_test /opt/homebrew/opt/libomp/lib/libomp.dylib)
+else()
+    target_link_libraries(dann_test OpenMP::OpenMP_CXX)
+endif()
+
 # Link gtest based on installation method
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
     target_link_libraries(dann_test 
         ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a pthread dann_core_minimal dann_utils)
 else()
     target_link_libraries(dann_test gtest gtest_main dann_core_minimal dann_utils)
+endif()
+
+# Add BLAS/LAPACK for Linux systems to test executable
+if(UNIX AND NOT APPLE)
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+    target_link_libraries(dann_test ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 endif()
 
 # Installation (commented out until dann_server is rebuilt)
@@ -388,7 +410,7 @@ add_test(NAME DANNTests COMMAND dann_test)
 # gRPC test client
 if(Protobuf_FOUND AND gRPC_FOUND)
     add_executable(test_grpc_client test_grpc_client.cpp)
-    target_link_libraries(test_grpc_client PRIVATE myproto)
+    target_link_libraries(test_grpc_client myproto)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_link_options(test_grpc_client PRIVATE -Wl,--no-as-needed)
@@ -396,7 +418,7 @@ if(Protobuf_FOUND AND gRPC_FOUND)
 
     find_package(HDF5 REQUIRED COMPONENTS CXX)
     target_include_directories(test_grpc_client PRIVATE ${HDF5_INCLUDE_DIRS})
-    target_link_libraries(test_grpc_client PRIVATE ${HDF5_CXX_LIBRARIES})
+    target_link_libraries(test_grpc_client ${HDF5_CXX_LIBRARIES})
 
     # Link gRPC libraries based on how they were found
     if(GRPC_FOUND_SYSTEM)
@@ -407,14 +429,14 @@ if(Protobuf_FOUND AND gRPC_FOUND)
         # avoid duplicating libraries on the final link line.
         # Ensure OpenSSL comes after static gRPC libs on the final link line (Linux only)
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-            target_link_libraries(test_grpc_client PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+            target_link_libraries(test_grpc_client OpenSSL::SSL OpenSSL::Crypto)
         endif()
     endif()
 
     # HDF5 depends on zlib, ensure it's linked (Linux only)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         find_package(ZLIB REQUIRED)
-        target_link_libraries(test_grpc_client PRIVATE ZLIB::ZLIB)
+        target_link_libraries(test_grpc_client ZLIB::ZLIB)
     endif()
 endif()
 
@@ -450,7 +472,7 @@ endif()
 if(APPLE)
     target_link_libraries(faiss_bench ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate")
 else()
-    target_link_libraries(faiss_bench ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES})
+    target_link_libraries(faiss_bench ${CMAKE_THREAD_LIBS_INIT} OpenMP::OpenMP_CXX)
 endif()
 
 target_link_libraries(faiss_bench ${HDF5_CXX_LIBRARIES})
@@ -473,7 +495,9 @@ else()
 endif()
 
 target_include_directories(dann_bench PRIVATE ${HDF5_INCLUDE_DIRS})
-target_link_libraries(dann_bench dann_core_minimal)
+
+# Don't use target_link_libraries for FAISS to avoid incorrect order
+# We will manually link FAISS with proper ordering
 
 if(UNIX AND NOT APPLE)
     find_package(BLAS REQUIRED)
@@ -482,14 +506,26 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if(APPLE)
-    target_link_libraries(dann_bench ${CMAKE_THREAD_LIBS_INIT} /opt/homebrew/opt/libomp/lib/libomp.dylib "-framework Accelerate")
-else()
-    target_link_libraries(dann_bench ${CMAKE_THREAD_LIBS_INIT} ${OpenMP_CXX_LIBRARIES})
+    target_link_libraries(dann_bench "-framework Accelerate")
 endif()
 
-target_link_libraries(dann_bench ${HDF5_CXX_LIBRARIES})
+if(APPLE)
+    target_link_libraries(dann_bench "-framework Accelerate")
+endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    find_package(ZLIB REQUIRED)
-    target_link_libraries(dann_bench ZLIB::ZLIB)
+# Link everything manually in the correct order for static libraries
+if(UNIX AND NOT APPLE)
+    target_link_libraries(dann_bench 
+        # Static libraries in dependency order
+        dann_core_minimal
+        ${FAISS_LIB_DIR}/libfaiss.a
+        /usr/lib/gcc/x86_64-linux-gnu/15/libgomp.a
+        ${CMAKE_THREAD_LIBS_INIT}
+        # Shared libraries last
+        ${HDF5_CXX_LIBRARIES}
+    )
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        find_package(ZLIB REQUIRED)
+        target_link_libraries(dann_bench ZLIB::ZLIB)
+    endif()
 endif()

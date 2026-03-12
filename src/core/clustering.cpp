@@ -14,6 +14,7 @@
 #include <memory>
 #include <cassert>
 #include <chrono>
+#include <faiss/utils/distances.h>
 
 namespace dann {
 
@@ -49,6 +50,7 @@ void Clustering::train(const std::vector<float>& vectors, size_t n) {
             
             prev_centroids = centroids;
             // 2.1 计算每个向量到最近的质心
+/*
             for (int i = 0; i < n; i++) {
                 float min_dis = std::numeric_limits<float>::max();
                 int centroid_j = 0;
@@ -62,6 +64,8 @@ void Clustering::train(const std::vector<float>& vectors, size_t n) {
                 dis[i] = min_dis;
                 assign[i] = centroid_j;
             }
+*/
+			faiss::knn_L2sqr(vectors.data(), centroids.data(), d, n, k, 1, &dis[0], &assign[0]);
 
             std::fill(centroids.begin(), centroids.end(), 0);
             // 2.2 重新计算质心
