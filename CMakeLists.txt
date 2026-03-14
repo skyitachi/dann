@@ -440,7 +440,6 @@ if(Protobuf_FOUND AND gRPC_FOUND)
     endif()
 endif()
 
-# Benchmark executables
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 
 # Faiss benchmark
@@ -511,6 +510,13 @@ endif()
 
 if(APPLE)
     target_link_libraries(dann_bench "-framework Accelerate")
+    target_link_libraries(dann_bench
+        dann_core_minimal
+        ${FAISS_LIB_DIR}/libfaiss.a
+        ${CMAKE_THREAD_LIBS_INIT}
+        /opt/homebrew/opt/libomp/lib/libomp.dylib
+        ${HDF5_CXX_LIBRARIES}
+    )
 endif()
 
 # Link everything manually in the correct order for static libraries

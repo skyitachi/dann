@@ -30,7 +30,7 @@ namespace dann {
     }
 
     // 推荐的nprobe设置策略
-    int determine_nprobe(int nlist, int recall_target) {
+    int determine_nprobe(int nlist, float recall_target) {
         if (recall_target >= 0.95) {
             return std::min(nlist / 4, 256); // 高召回率
         } else if (recall_target >= 0.90) {
