@@ -4,7 +4,7 @@ if (EXISTS "/home/skyitachi/utility/vcpkg/scripts/buildsystems/vcpkg.cmake")
 endif ()
 project(DANN VERSION 1.0.0)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(APPLE)
@@ -172,6 +172,47 @@ if(UNIX AND NOT APPLE)
     find_package(BLAS REQUIRED)
     find_package(LAPACK REQUIRED)
     target_link_libraries(dann_utils ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+endif()
+
+# Find Apache Arrow and Parquet
+find_package(Arrow QUIET)
+find_package(Parquet QUIET)
+
+if(NOT Arrow_FOUND OR NOT Parquet_FOUND)
+    # Try pkg-config fallback
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ARROW QUIET arrow)
+        pkg_check_modules(PARQUET QUIET parquet)
+        if(ARROW_FOUND AND PARQUET_FOUND)
+            message(STATUS "Found Arrow and Parquet via pkg-config")
+            set(Arrow_FOUND TRUE)
+            set(Parquet_FOUND TRUE)
+            set(ARROW_INCLUDE_DIRS ${ARROW_INCLUDE_DIRS})
+            set(ARROW_LIBRARIES ${ARROW_LIBRARIES})
+            set(ARROW_LIBRARY_DIRS ${ARROW_LIBRARY_DIRS})
+            set(PARQUET_INCLUDE_DIRS ${PARQUET_INCLUDE_DIRS})
+            set(PARQUET_LIBRARIES ${PARQUET_LIBRARIES})
+            set(PARQUET_LIBRARY_DIRS ${PARQUET_LIBRARY_DIRS})
+        endif()
+    endif()
+endif()
+
+# Fallback: if libraries are still empty, try to find them manually
+if(Arrow_FOUND AND NOT ARROW_LIBRARIES)
+    find_library(ARROW_LIB arrow REQUIRED)
+    find_library(PARQUET_LIB parquet REQUIRED)
+    set(ARROW_LIBRARIES ${ARROW_LIB})
+    set(PARQUET_LIBRARIES ${PARQUET_LIB})
+    message(STATUS "Found Arrow library: ${ARROW_LIB}")
+    message(STATUS "Found Parquet library: ${PARQUET_LIB}")
+endif()
+
+if(Arrow_FOUND AND Parquet_FOUND)
+    message(STATUS "Apache Arrow and Parquet found")
+    add_definitions(-DHAVE_ARROW_PARQUET)
+else()
+    message(STATUS "Apache Arrow or Parquet not found, arrow_test will not be built")
 endif()
 
 #target_link_libraries(dann_utils spdlog)
@@ -531,8 +572,61 @@ if(UNIX AND NOT APPLE)
         # Shared libraries last
         ${HDF5_CXX_LIBRARIES}
     )
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        find_package(ZLIB REQUIRED)
-        target_link_libraries(dann_bench ZLIB::ZLIB)
+endif()
+
+# Arrow and Parquet test
+if(Arrow_FOUND AND Parquet_FOUND)
+    add_executable(arrow_test tests/arrow_parquet_test.cpp)
+    
+    target_include_directories(arrow_test PRIVATE 
+        ${ARROW_INCLUDE_DIRS} 
+        ${PARQUET_INCLUDE_DIRS}
+    )
+    
+    # Add link directories for pkg-config found libraries
+    target_link_directories(arrow_test PRIVATE
+        ${ARROW_LIBRARY_DIRS}
+        ${PARQUET_LIBRARY_DIRS}
+    )
+    
+    if(APPLE)
+        target_compile_options(arrow_test PRIVATE -Xpreprocessor -fopenmp)
+        target_include_directories(arrow_test PRIVATE /opt/homebrew/opt/libomp/include)
+    else()
+        target_compile_options(arrow_test PRIVATE ${OpenMP_CXX_FLAGS})
+        target_include_directories(arrow_test PRIVATE ${OpenMP_CXX_INCLUDE_DIRS})
     endif()
+    
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
+        target_link_libraries(arrow_test
+            ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a pthread
+        )
+    else()
+        target_link_libraries(arrow_test gtest gtest_main)
+    endif()
+    
+    message(STATUS "ARROW_LIBRARIES: ${ARROW_LIBRARIES}")
+    message(STATUS "PARQUET_LIBRARIES: ${PARQUET_LIBRARIES}")
+    message(STATUS "ARROW_LIBRARY_DIRS: ${ARROW_LIBRARY_DIRS}")
+    message(STATUS "PARQUET_LIBRARY_DIRS: ${PARQUET_LIBRARY_DIRS}")
+    
+    target_link_libraries(arrow_test
+        ${ARROW_LIBRARIES}
+        ${PARQUET_LIBRARIES}
+    )
+    
+    if(APPLE)
+        target_link_libraries(arrow_test
+            ${CMAKE_THREAD_LIBS_INIT}
+            /opt/homebrew/opt/libomp/lib/libomp.dylib
+        )
+    else()
+        target_link_libraries(arrow_test
+            ${CMAKE_THREAD_LIBS_INIT}
+            OpenMP::OpenMP_CXX
+        )
+    endif()
+    
+    enable_testing()
+    add_test(NAME ArrowParquetTest COMMAND arrow_test)
 endif()
