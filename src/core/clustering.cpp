@@ -18,6 +18,43 @@
 
 namespace dann {
 
+namespace {
+
+#define EPS (1 / 1024.)
+
+size_t split_clusters(std::vector<float>& centroids, std::vector<faiss::idx_t>& hassign, int k, int d) {
+    // 选取最大cluster / 2
+    size_t nsplit = 0;
+    for (int i = 0; i < k; i++) {
+        if (hassign[i] == 0) {
+            int cj = -1;
+            for (int j = 0; j < k; j++) {
+                if (cj == -1 || hassign[j] > hassign[cj]) {
+                    cj = j;
+                }
+            }
+            assert(cj >= 0);
+            std::copy(centroids.begin() + cj * d, centroids.begin() + cj * d + d, centroids.begin() + i * d);
+            /* small symmetric pertubation */
+            for (size_t j = 0; j < d; j++) {
+                if (j % 2 == 0) {
+                    centroids[i * d + j] *= 1 + EPS;
+                    centroids[cj * d + j] *= 1 - EPS;
+                } else {
+                    centroids[i * d + j] *= 1 - EPS;
+                    centroids[cj * d + j] *= 1 + EPS;
+                }
+            }
+
+            hassign[i] = hassign[cj] / 2;
+            hassign[cj] -= hassign[i];
+            nsplit++;
+        }
+    }
+    return nsplit;
+}
+}
+
 Clustering::Clustering(int d, int k): d(d), k(k) {}
 
 Clustering::Clustering(int d, int k, const ClusteringParameters& cp): d(d), k(k), ClusteringParameters(cp) {}
@@ -44,6 +81,7 @@ void Clustering::train(const std::vector<float>& vectors, size_t n) {
         std::unique_ptr<float[]> dis(new float[n]);
         std::unique_ptr<faiss::idx_t[]> assign(new faiss::idx_t[n]);
         std::vector<float> prev_centroids(d * k);
+        std::vector<faiss::idx_t> counts(k);
         float convergence_threshold = 1e-6f;
         for (int t = 0; t < niter; t++) {
             auto iter_start = std::chrono::high_resolution_clock::now();
@@ -69,10 +107,7 @@ void Clustering::train(const std::vector<float>& vectors, size_t n) {
 
             std::fill(centroids.begin(), centroids.end(), 0);
             // 2.2 重新计算质心
-            std::unique_ptr<faiss::idx_t[]> counts(new faiss::idx_t[k]);
-            for (int i = 0; i < k; i++) {
-                counts[i] = 0;
-            }
+            std::fill(counts.begin(), counts.end(), 0);
             for (int i = 0; i < n; i++) {
                 counts[assign[i]] += 1;
                 for (int j = 0; j < d; j++) {
@@ -87,7 +122,9 @@ void Clustering::train(const std::vector<float>& vectors, size_t n) {
                     centroids[i * d + j] /= counts[i];
                 }
             }
-            // 2.3 判断误差
+            // 2.3 split clusters
+            int nsplit = split_clusters(centroids, counts, k, d);
+            // 2.4 判断误差
             if (t > 0) {
                 float max_change = 0.0f;
                 for (int i = 0; i < k; i++) {
@@ -97,7 +134,7 @@ void Clustering::train(const std::vector<float>& vectors, size_t n) {
                 
                 auto iter_end = std::chrono::high_resolution_clock::now();
                 auto iter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(iter_end - iter_start);
-                LOG_INFOF("Clustering iteration %d: max_change=%.6f, duration=%ld ms", t, max_change, iter_duration.count());
+                LOG_INFOF("Clustering iteration %d: max_change=%.6f, duration=%ld ms, npslit=%d", t, max_change, iter_duration.count(), nsplit);
                 
                 if (max_change < convergence_threshold) {
                     break;

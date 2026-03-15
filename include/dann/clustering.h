@@ -21,7 +21,7 @@ struct ClusteringParameters {
 };
 
 struct Clustering:ClusteringParameters {
-    size_t d; // dimension
+    int d; // dimension
     int k;
 
     std::vector<float> centroids;
