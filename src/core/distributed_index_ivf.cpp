@@ -13,6 +13,7 @@
 
 #include "dann/logger.h"
 #include "dann/utils.h"
+#include "dann/io_thread_pool.h"
 
 namespace dann {
     int64_t get_nlist(int64_t N) {
@@ -180,10 +181,24 @@ namespace dann {
             int shard_id = global_centroid_ids_[centroid.index] % shard_counts_;
             query_centroids_map[shard_id].push_back(global_centroid_ids_[centroid.index]);
         }
+
+        // Parallel search using IO thread pool
+        auto& thread_pool = get_io_thread_pool();
+        std::vector<std::future<std::vector<InternalSearchResult>>> futures;
+        futures.reserve(query_centroids_map.size());
+
         for (const auto &[shard_id, centroids]: query_centroids_map) {
-            auto shard_result = shards_[shard_id]->search(centroids, query, k);
+            futures.push_back(thread_pool.enqueue([this, shard_id, &centroids, &query, k]() {
+                return shards_[shard_id]->search(centroids, query, k);
+            }));
+        }
+
+        // Collect results from all futures
+        for (auto& fut : futures) {
+            auto shard_result = fut.get();
             results.insert(results.end(), shard_result.begin(), shard_result.end());
         }
+
         std::sort(results.begin(), results.end());
         results.resize(k);
         return results;

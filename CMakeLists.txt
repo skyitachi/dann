@@ -89,6 +89,7 @@ set(CORE_SOURCES_MINIMAL
     src/core/distributed_index_ivf.cpp
     src/core/ivf_shard.cpp
     src/core/index_factory.cpp
+    src/core/io_thread_pool.cpp
 )
 
 # Create minimal core library for testing
