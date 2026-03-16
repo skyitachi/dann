@@ -175,6 +175,7 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Find Apache Arrow and Parquet
+set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/apache-arrow;${CMAKE_PREFIX_PATH}")
 find_package(Arrow QUIET)
 find_package(Parquet QUIET)
 
@@ -204,8 +205,19 @@ if(Arrow_FOUND AND NOT ARROW_LIBRARIES)
     find_library(PARQUET_LIB parquet REQUIRED)
     set(ARROW_LIBRARIES ${ARROW_LIB})
     set(PARQUET_LIBRARIES ${PARQUET_LIB})
+    
+    find_path(ARROW_INCLUDE_DIR arrow/array.h REQUIRED HINTS "/opt/homebrew/Cellar/apache-arrow/*/include")
+    find_path(PARQUET_INCLUDE_DIR parquet/arrow/reader.h REQUIRED HINTS "/opt/homebrew/Cellar/apache-arrow/*/include")
+    
+    set(ARROW_INCLUDE_DIRS ${ARROW_INCLUDE_DIR})
+    set(PARQUET_INCLUDE_DIRS ${PARQUET_INCLUDE_DIR})
+    get_filename_component(ARROW_LIBRARY_DIRS ${ARROW_LIB} DIRECTORY)
+    get_filename_component(PARQUET_LIBRARY_DIRS ${PARQUET_LIB} DIRECTORY)
+    
     message(STATUS "Found Arrow library: ${ARROW_LIB}")
     message(STATUS "Found Parquet library: ${PARQUET_LIB}")
+    message(STATUS "Found Arrow include: ${ARROW_INCLUDE_DIRS}")
+    message(STATUS "Found Parquet include: ${PARQUET_INCLUDE_DIRS}")
 endif()
 
 if(Arrow_FOUND AND Parquet_FOUND)
@@ -582,7 +594,9 @@ if(Arrow_FOUND AND Parquet_FOUND)
         ${ARROW_INCLUDE_DIRS} 
         ${PARQUET_INCLUDE_DIRS}
     )
-    
+    message(STATUS "arrow_include_dirs: ${ARROW_INCLUDE_DIRS}")
+    message(STATUS "parquet_include_dirs: ${PARQUET_INCLUDE_DIRS}")
+
     # Add link directories for pkg-config found libraries
     target_link_directories(arrow_test PRIVATE
         ${ARROW_LIBRARY_DIRS}

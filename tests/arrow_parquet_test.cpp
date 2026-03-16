@@ -100,7 +100,9 @@ bool write_vectors_to_parquet(const std::string& path,
     if (!list_builder.Reserve(ids.size()).ok()) return false;
 
     size_t total_floats = 0;
+    size_t columns = 0;
     for (const auto& vec : vectors) {
+        columns = vec.size();
         total_floats += vec.size();
     }
     if (!float_builder.Reserve(total_floats).ok()) return false;
@@ -128,7 +130,7 @@ bool write_vectors_to_parquet(const std::string& path,
 
     // Write to file
     auto write_options = parquet::WriterProperties::Builder()
-        .data_pagesize(sizeof(float) * total_floats)
+        .data_pagesize(sizeof(float) * columns)
         ->compression(parquet::Compression::UNCOMPRESSED)
         ->build();
     
@@ -210,6 +212,11 @@ public:
     size_t size() const { return id_column_->length(); }
     bool empty() const { return size() == 0; }
     size_t dimension() const { return dimension_; }
+
+    const float* getContiguousBuffer() {
+        auto values_array = std::static_pointer_cast<arrow::FloatArray>(vector_column_->values());
+        return values_array->raw_values();
+    }
 
     // Iterator support
     class Iterator {
@@ -300,6 +307,15 @@ TEST_F(ArrowParquetTest, WriteAndReadParquet) {
 
         for (size_t j = 0; j < 4; ++j) {
             EXPECT_FLOAT_EQ(vec[j], vectors[i][j]);
+        }
+    }
+
+    const float *arr = store.getContiguousBuffer();
+    for (int i = 0; i < vectors.size(); i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            EXPECT_FLOAT_EQ(arr[i * 4 + j], vectors[i][j]);
         }
     }
 }
@@ -479,6 +495,54 @@ TEST_F(ArrowParquetTest, LargeVectorSet) {
         EXPECT_EQ(vec.id(), static_cast<int64_t>(idx));
         EXPECT_FLOAT_EQ(vec[0], vectors[idx][0]);
         EXPECT_FLOAT_EQ(vec[dimension - 1], vectors[idx][dimension - 1]);
+    }
+}
+
+// Test: Write and read 128-dimensional vectors with 10000 vectors
+TEST_F(ArrowParquetTest, WriteAndRead128DimVectors) {
+    const size_t num_vectors = 10000;
+    const size_t dimension = 128;
+
+    std::vector<int64_t> ids;
+    std::vector<std::vector<float>> vectors;
+
+    ids.reserve(num_vectors);
+    vectors.reserve(num_vectors);
+
+    for (size_t i = 0; i < num_vectors; ++i) {
+        ids.push_back(static_cast<int64_t>(i));
+        std::vector<float> vec(dimension);
+        for (size_t j = 0; j < dimension; ++j) {
+            vec[j] = static_cast<float>(i * dimension + j) / 1000.0f;
+        }
+        vectors.push_back(std::move(vec));
+    }
+
+    EXPECT_TRUE(write_vectors_to_parquet(test_file_, ids, vectors));
+
+    ParquetVectorStore store;
+    EXPECT_TRUE(store.load(test_file_));
+
+    EXPECT_EQ(store.size(), num_vectors);
+    EXPECT_EQ(store.dimension(), dimension);
+
+    for (size_t i = 0; i < ids.size(); ++i) {
+        VectorView vec = store[ids[i]];
+        EXPECT_EQ(vec.size(), dimension);
+        EXPECT_EQ(vec.id(), static_cast<int64_t>(i));
+
+        for (size_t j = 0; j < dimension; ++j) {
+            EXPECT_FLOAT_EQ(vec[j], vectors[i][j]);
+        }
+    }
+
+    const float *arr = store.getContiguousBuffer();
+    for (size_t i = 0; i < ids.size(); i++)
+    {
+        for (int j = 0; j < dimension; j++)
+        {
+            EXPECT_FLOAT_EQ(arr[i * dimension + j], vectors[i][j]);
+        }
     }
 }
 
