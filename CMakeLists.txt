@@ -80,6 +80,15 @@ else()
     message(STATUS "Using system gtest")
 endif()
 
+# Add nlohmann/json library (header-only)
+include(FetchContent)
+FetchContent_Declare(json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(json)
+
 # Core library sources (minimal version without protobuf for testing)
 set(CORE_SOURCES_MINIMAL
     src/core/vector_index.cpp
@@ -137,10 +146,9 @@ set(NETWORK_SOURCES
 )
 
 # Storage layer sources
-#set(STORAGE_SOURCES
-#    src/storage/redis_client.cpp
-#    src/storage/local_storage.cpp
-#)
+set(STORAGE_SOURCES
+    src/storage/filesystem_metadata_storage.cpp
+)
 
 # Utils sources
 set(UTILS_SOURCES
@@ -174,58 +182,7 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(dann_utils ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 endif()
 
-# Find Apache Arrow and Parquet
-set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/apache-arrow;${CMAKE_PREFIX_PATH}")
-find_package(Arrow QUIET)
-find_package(Parquet QUIET)
-
-if(NOT Arrow_FOUND OR NOT Parquet_FOUND)
-    # Try pkg-config fallback
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(ARROW QUIET arrow)
-        pkg_check_modules(PARQUET QUIET parquet)
-        if(ARROW_FOUND AND PARQUET_FOUND)
-            message(STATUS "Found Arrow and Parquet via pkg-config")
-            set(Arrow_FOUND TRUE)
-            set(Parquet_FOUND TRUE)
-            set(ARROW_INCLUDE_DIRS ${ARROW_INCLUDE_DIRS})
-            set(ARROW_LIBRARIES ${ARROW_LIBRARIES})
-            set(ARROW_LIBRARY_DIRS ${ARROW_LIBRARY_DIRS})
-            set(PARQUET_INCLUDE_DIRS ${PARQUET_INCLUDE_DIRS})
-            set(PARQUET_LIBRARIES ${PARQUET_LIBRARIES})
-            set(PARQUET_LIBRARY_DIRS ${PARQUET_LIBRARY_DIRS})
-        endif()
-    endif()
-endif()
-
-# Fallback: if libraries are still empty, try to find them manually
-if(Arrow_FOUND AND NOT ARROW_LIBRARIES)
-    find_library(ARROW_LIB arrow REQUIRED)
-    find_library(PARQUET_LIB parquet REQUIRED)
-    set(ARROW_LIBRARIES ${ARROW_LIB})
-    set(PARQUET_LIBRARIES ${PARQUET_LIB})
-    
-    find_path(ARROW_INCLUDE_DIR arrow/array.h REQUIRED HINTS "/opt/homebrew/Cellar/apache-arrow/*/include")
-    find_path(PARQUET_INCLUDE_DIR parquet/arrow/reader.h REQUIRED HINTS "/opt/homebrew/Cellar/apache-arrow/*/include")
-    
-    set(ARROW_INCLUDE_DIRS ${ARROW_INCLUDE_DIR})
-    set(PARQUET_INCLUDE_DIRS ${PARQUET_INCLUDE_DIR})
-    get_filename_component(ARROW_LIBRARY_DIRS ${ARROW_LIB} DIRECTORY)
-    get_filename_component(PARQUET_LIBRARY_DIRS ${PARQUET_LIB} DIRECTORY)
-    
-    message(STATUS "Found Arrow library: ${ARROW_LIB}")
-    message(STATUS "Found Parquet library: ${PARQUET_LIB}")
-    message(STATUS "Found Arrow include: ${ARROW_INCLUDE_DIRS}")
-    message(STATUS "Found Parquet include: ${PARQUET_INCLUDE_DIRS}")
-endif()
-
-if(Arrow_FOUND AND Parquet_FOUND)
-    message(STATUS "Apache Arrow and Parquet found")
-    add_definitions(-DHAVE_ARROW_PARQUET)
-else()
-    message(STATUS "Apache Arrow or Parquet not found, arrow_test will not be built")
-endif()
+message(STATUS "Apache Arrow and Parquet support disabled")
 
 #target_link_libraries(dann_utils spdlog)
 
@@ -428,6 +385,7 @@ set(TEST_FILES
     tests/vector_index_test.cpp
     tests/clustering_test.cpp
     tests/distributed_ivf_test.cpp
+    tests/index_metadata_test.cpp
 )
 add_executable(dann_test ${TEST_FILES})
 
@@ -441,9 +399,9 @@ endif()
 # Link gtest based on installation method
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
     target_link_libraries(dann_test 
-        ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a pthread dann_core_minimal dann_utils)
+        ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a pthread dann_core_minimal dann_utils nlohmann_json::nlohmann_json)
 else()
-    target_link_libraries(dann_test gtest gtest_main dann_core_minimal dann_utils)
+    target_link_libraries(dann_test gtest gtest_main dann_core_minimal dann_utils nlohmann_json::nlohmann_json)
 endif()
 
 # Add BLAS/LAPACK for Linux systems to test executable
@@ -586,61 +544,3 @@ if(UNIX AND NOT APPLE)
     )
 endif()
 
-# Arrow and Parquet test
-if(Arrow_FOUND AND Parquet_FOUND)
-    add_executable(arrow_test tests/arrow_parquet_test.cpp)
-    
-    target_include_directories(arrow_test PRIVATE 
-        ${ARROW_INCLUDE_DIRS} 
-        ${PARQUET_INCLUDE_DIRS}
-    )
-    message(STATUS "arrow_include_dirs: ${ARROW_INCLUDE_DIRS}")
-    message(STATUS "parquet_include_dirs: ${PARQUET_INCLUDE_DIRS}")
-
-    # Add link directories for pkg-config found libraries
-    target_link_directories(arrow_test PRIVATE
-        ${ARROW_LIBRARY_DIRS}
-        ${PARQUET_LIBRARY_DIRS}
-    )
-    
-    if(APPLE)
-        target_compile_options(arrow_test PRIVATE -Xpreprocessor -fopenmp)
-        target_include_directories(arrow_test PRIVATE /opt/homebrew/opt/libomp/include)
-    else()
-        target_compile_options(arrow_test PRIVATE ${OpenMP_CXX_FLAGS})
-        target_include_directories(arrow_test PRIVATE ${OpenMP_CXX_INCLUDE_DIRS})
-    endif()
-    
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/install")
-        target_link_libraries(arrow_test
-            ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a pthread
-        )
-    else()
-        target_link_libraries(arrow_test gtest gtest_main)
-    endif()
-    
-    message(STATUS "ARROW_LIBRARIES: ${ARROW_LIBRARIES}")
-    message(STATUS "PARQUET_LIBRARIES: ${PARQUET_LIBRARIES}")
-    message(STATUS "ARROW_LIBRARY_DIRS: ${ARROW_LIBRARY_DIRS}")
-    message(STATUS "PARQUET_LIBRARY_DIRS: ${PARQUET_LIBRARY_DIRS}")
-    
-    target_link_libraries(arrow_test
-        ${ARROW_LIBRARIES}
-        ${PARQUET_LIBRARIES}
-    )
-    
-    if(APPLE)
-        target_link_libraries(arrow_test
-            ${CMAKE_THREAD_LIBS_INIT}
-            /opt/homebrew/opt/libomp/lib/libomp.dylib
-        )
-    else()
-        target_link_libraries(arrow_test
-            ${CMAKE_THREAD_LIBS_INIT}
-            OpenMP::OpenMP_CXX
-        )
-    endif()
-    
-    enable_testing()
-    add_test(NAME ArrowParquetTest COMMAND arrow_test)
-endif()
