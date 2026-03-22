@@ -12,7 +12,8 @@ TEST(IndexMetaDataTest, SerializeToJson) {
     metadata.node_ids = {"node_id1", "node_id2", "node_id3"};
     metadata.type = "ivf";
     metadata.dimension = 128;
-    
+    metadata.nprobe = 32;
+
     metadata.routing_table["node_id1"] = NodeInfo("coordinate", "main_index_file_path");
     metadata.routing_table["node_id2"] = NodeInfo("data", "data_file_path");
     metadata.routing_table["node_id3"] = NodeInfo("data", "data_file_path");
@@ -22,7 +23,8 @@ TEST(IndexMetaDataTest, SerializeToJson) {
     j["node_ids"] = metadata.node_ids;
     j["type"] = metadata.type;
     j["dimension"] = metadata.dimension;
-    
+    j["nprobe"] = metadata.nprobe;
+
     json routing_table = json::object();
     for (const auto& [node_id, node_info] : metadata.routing_table) {
         routing_table[node_id] = {
@@ -37,6 +39,7 @@ TEST(IndexMetaDataTest, SerializeToJson) {
         "node_ids": ["node_id1", "node_id2", "node_id3"],
         "type": "ivf",
         "dimension": 128,
+        "nprobe": 32,
         "routing_table": {
             "node_id1": {
                 "role": "coordinate",
@@ -63,6 +66,7 @@ TEST(IndexMetaDataTest, DeserializeFromJson) {
         "node_ids": ["node_id1", "node_id2", "node_id3"],
         "type": "ivf",
         "dimension": 128,
+        "nprobe": 32,
         "routing_table": {
             "node_id1": {
                 "role": "coordinate",
@@ -86,7 +90,8 @@ TEST(IndexMetaDataTest, DeserializeFromJson) {
     metadata.node_ids = j["node_ids"].get<std::vector<std::string>>();
     metadata.type = j["type"];
     metadata.dimension = j["dimension"];
-    
+    metadata.nprobe = j["nprobe"];
+
     for (auto& [node_id, node_info_json] : j["routing_table"].items()) {
         NodeInfo node_info;
         node_info.role = node_info_json["role"];
@@ -99,12 +104,13 @@ TEST(IndexMetaDataTest, DeserializeFromJson) {
     EXPECT_EQ(metadata.node_ids[0], "node_id1");
     EXPECT_EQ(metadata.type, "ivf");
     EXPECT_EQ(metadata.dimension, 128);
+    EXPECT_EQ(metadata.nprobe, 32);
     EXPECT_EQ(metadata.routing_table.size(), 3);
-    
+
     auto& node1 = metadata.routing_table["node_id1"];
     EXPECT_EQ(node1.role, "coordinate");
     EXPECT_EQ(node1.index_file, "main_index_file_path");
-    
+
     auto& node2 = metadata.routing_table["node_id2"];
     EXPECT_EQ(node2.role, "data");
     EXPECT_EQ(node2.index_file, "data_file_path");
@@ -116,7 +122,8 @@ TEST(IndexMetaDataTest, RoundTripSerialization) {
     original.node_ids = {"node_a", "node_b"};
     original.type = "ivf";
     original.dimension = 64;
-    
+    original.nprobe = 16;
+
     original.routing_table["node_a"] = NodeInfo("coordinate", "/path/to/coord.idx");
     original.routing_table["node_b"] = NodeInfo("data", "/path/to/data.idx");
 
@@ -125,7 +132,8 @@ TEST(IndexMetaDataTest, RoundTripSerialization) {
     j["node_ids"] = original.node_ids;
     j["type"] = original.type;
     j["dimension"] = original.dimension;
-    
+    j["nprobe"] = original.nprobe;
+
     json routing_table = json::object();
     for (const auto& [node_id, node_info] : original.routing_table) {
         routing_table[node_id] = {
@@ -140,7 +148,8 @@ TEST(IndexMetaDataTest, RoundTripSerialization) {
     deserialized.node_ids = j["node_ids"].get<std::vector<std::string>>();
     deserialized.type = j["type"];
     deserialized.dimension = j["dimension"];
-    
+    deserialized.nprobe = j["nprobe"];
+
     for (auto& [node_id, node_info_json] : j["routing_table"].items()) {
         NodeInfo node_info;
         node_info.role = node_info_json["role"];
@@ -152,8 +161,9 @@ TEST(IndexMetaDataTest, RoundTripSerialization) {
     EXPECT_EQ(original.node_ids, deserialized.node_ids);
     EXPECT_EQ(original.type, deserialized.type);
     EXPECT_EQ(original.dimension, deserialized.dimension);
+    EXPECT_EQ(original.nprobe, deserialized.nprobe);
     EXPECT_EQ(original.routing_table.size(), deserialized.routing_table.size());
-    
+
     for (const auto& [node_id, node_info] : original.routing_table) {
         EXPECT_TRUE(deserialized.routing_table.count(node_id));
         EXPECT_EQ(node_info.role, deserialized.routing_table[node_id].role);
@@ -166,13 +176,33 @@ TEST(IndexMetaDataTest, EmptyRoutingTable) {
     metadata.index = "empty_test";
     metadata.type = "ivf";
     metadata.dimension = 256;
+    metadata.nprobe = 64;
 
     json j = json::object();
     j["index"] = metadata.index;
     j["node_ids"] = metadata.node_ids;
     j["type"] = metadata.type;
     j["dimension"] = metadata.dimension;
+    j["nprobe"] = metadata.nprobe;
     j["routing_table"] = json::object();
 
     EXPECT_TRUE(j["routing_table"].empty());
+}
+
+TEST(IndexMetaDataTest, NprobeValue) {
+    IndexMetaData metadata;
+    metadata.index = "test_index";
+    metadata.type = "ivf";
+    metadata.dimension = 128;
+    metadata.nprobe = 256;
+
+    EXPECT_EQ(metadata.nprobe, 256);
+
+    json j = json::object();
+    j["index"] = metadata.index;
+    j["type"] = metadata.type;
+    j["dimension"] = metadata.dimension;
+    j["nprobe"] = metadata.nprobe;
+
+    EXPECT_EQ(j["nprobe"], 256);
 }

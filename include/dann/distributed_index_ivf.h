@@ -13,12 +13,14 @@
 #include "dann/ivf_shard.h"
 #include "dann/types.h"
 #include "dann/index_shard.h"
+#include "dann/metadata_storage.h"
 
 namespace dann
 {
 
 class DistributedIndexIVF: public IndexShard {
 public:
+    DistributedIndexIVF(std::string name, std::string node_id, std::shared_ptr<MetaDataStorage> meta_data_storage);
     DistributedIndexIVF(std::string name, int d, int shards, std::vector<std::string> nodes);
     DistributedIndexIVF(std::string name, int d, int shards, int nlist, int nprobe, std::vector<std::string> nodes);
     bool add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids) override;
@@ -43,6 +45,8 @@ private:
     int nlist_{-1};
     int nprobe_;
 
+    std::shared_ptr<MetaDataStorage> meta_data_storage_;
+
     std::unique_ptr<Clustering> clustering_;
     std::vector<float> global_centroids_;
     std::vector<int> global_centroid_ids_;
@@ -51,6 +55,7 @@ private:
     // cluster nodes
     std::vector<std::string> nodes_;
     std::set<int> shard_ids_;
+    std::shared_ptr<IndexMetaData> meta_data_;
 
 };
 

@@ -27,9 +27,10 @@ public:
     std::vector<std::string> node_ids;
     std::string type;
     int dimension;
+    int nprobe;
     std::unordered_map<std::string, NodeInfo> routing_table;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(IndexMetaData, index, node_ids, type, dimension, routing_table)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(IndexMetaData, index, node_ids, type, dimension, nprobe, routing_table)
 };
 
 }

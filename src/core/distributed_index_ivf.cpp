@@ -14,6 +14,7 @@
 #include "dann/logger.h"
 #include "dann/utils.h"
 #include "dann/io_thread_pool.h"
+#include "dann/status.h"
 
 namespace dann {
     int64_t get_nlist(int64_t N) {
@@ -67,6 +68,22 @@ namespace dann {
         for (int i = 0; i < shard_counts_; i++) {
             shards_[i] = std::make_unique<IndexIVFShard>(d, i, nodes_[i % node_size]);
         }
+    }
+
+
+    DistributedIndexIVF::DistributedIndexIVF(std::string name, std::string node_id, std::shared_ptr<MetaDataStorage> meta_data_storage):
+        name_(std::move(name)), meta_data_storage_(meta_data_storage) {
+        Status s = meta_data_storage_->Get(name_, &meta_data_);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to load metadata: %s", s.ToString().c_str());
+            exit(1);
+        }
+        if (!meta_data_->routing_table.contains(node_id)) {
+            LOG_ERRORF("Node %s does not exist", node_id.c_str());
+            exit(1);
+        }
+        dimension_ = meta_data_->dimension;
+        nprobe_ = meta_data_->nprobe;
     }
 
     int DistributedIndexIVF::dimension() const {

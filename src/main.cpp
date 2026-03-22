@@ -46,6 +46,8 @@ struct Config {
     std::string index_path = "";
     int shard_count = 1;
     std::vector<std::string> seed_nodes;
+    int hnsw_m = 16;
+    int hnsw_ef_construction = 100;
 };
 
 std::string to_absolute_path(const std::string& path) {

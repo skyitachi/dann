@@ -99,10 +99,11 @@ set(CORE_SOURCES_MINIMAL
     src/core/ivf_shard.cpp
     src/core/index_factory.cpp
     src/core/io_thread_pool.cpp
+    src/core/status.cpp
 )
 
 # Create minimal core library for testing
-add_library(dann_core_minimal STATIC ${CORE_SOURCES_MINIMAL})
+add_library(dann_core_minimal STATIC ${CORE_SOURCES_MINIMAL} ${STORAGE_SOURCES})
 
 # Add OpenMP support for macOS
 if(APPLE)
@@ -148,6 +149,7 @@ set(NETWORK_SOURCES
 # Storage layer sources
 set(STORAGE_SOURCES
     src/storage/filesystem_metadata_storage.cpp
+    src/storage/filesystem_data_store.cpp
 )
 
 # Utils sources
