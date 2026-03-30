@@ -89,6 +89,13 @@ FetchContent_Declare(json
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 FetchContent_MakeAvailable(json)
 
+# Storage layer sources
+set(STORAGE_SOURCES
+    src/storage/filesystem_metadata_storage.cpp
+    src/storage/filesystem_data_store.cpp
+    src/storage/main_index_storage.cpp
+)
+
 # Core library sources (minimal version without protobuf for testing)
 set(CORE_SOURCES_MINIMAL
     src/core/vector_index.cpp
@@ -144,12 +151,6 @@ set(NETWORK_SOURCES
 #    src/network/message_handler.cpp
     src/network/vector_search_service_impl.h
     src/network/vector_search_service_impl.cpp
-)
-
-# Storage layer sources
-set(STORAGE_SOURCES
-    src/storage/filesystem_metadata_storage.cpp
-    src/storage/filesystem_data_store.cpp
 )
 
 # Utils sources

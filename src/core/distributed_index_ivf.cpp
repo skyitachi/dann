@@ -172,8 +172,32 @@ namespace dann {
             const int shard_id = static_cast<int>(centroid % shard_counts_);
             shards_[shard_id]->add_posting(static_cast<int>(centroid), std::move(postings[centroid]));
         }
-        // TODO: 这里需要生成postings文件 作为shard数据
-        // 需要生成global_centroids的文件 作为main index
+        
+        // 5) Build main index storage with centroids and assignments
+        main_index_storage_ = std::make_unique<MainIndexStorage>(dimension_);
+        for (int64_t centroid = 0; centroid < num_centroids; ++centroid) {
+            main_index_storage_->AddCentroid(global_centroids_.data() + centroid * dimension_);
+        }
+        
+        // Build assignments map: for each shard, track which centroids belong to it
+        std::unordered_map<int, std::vector<uint32_t>> shard_to_centroids;
+        for (int64_t centroid = 0; centroid < num_centroids; ++centroid) {
+            if (!postings[centroid].vector_ids.empty()) {
+                int shard_id = static_cast<int>(centroid % shard_counts_);
+                shard_to_centroids[shard_id].push_back(static_cast<uint32_t>(centroid));
+            }
+        }
+        
+        // Add assignments for each shard
+        for (const auto& [shard_id, centroid_list] : shard_to_centroids) {
+            if (centroid_list.empty()) continue;
+            
+            uint32_t centroid_start = centroid_list.front();
+            uint32_t centroid_end = centroid_list.back();
+            std::string node_id = nodes_[shard_id % nodes_.size()];
+            
+            main_index_storage_->AddAssignment(centroid_start, centroid_end, node_id);
+        }
 
         is_trained_ = true;
     }

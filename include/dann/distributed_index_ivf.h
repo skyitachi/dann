@@ -14,6 +14,7 @@
 #include "dann/types.h"
 #include "dann/index_shard.h"
 #include "dann/metadata_storage.h"
+#include "dann/main_index_storage.h"
 
 namespace dann
 {
@@ -50,6 +51,7 @@ private:
     std::unique_ptr<Clustering> clustering_;
     std::vector<float> global_centroids_;
     std::vector<int> global_centroid_ids_;
+    std::unique_ptr<MainIndexStorage> main_index_storage_;
 
     std::unordered_map<int, std::unique_ptr<IndexIVFShard>> shards_;
     // cluster nodes

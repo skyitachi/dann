@@ -63,7 +63,7 @@ Status FileSystemMetaDataStorage::Get(const std::string& index, std::shared_ptr<
         }
     }
 
-    *metadata = std::make_shared<>(metadata_cache_[index]);
+    *metadata = std::make_shared<IndexMetaData>(metadata_cache_[index]);
     return Status::OK();
 }
 
