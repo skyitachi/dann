@@ -30,6 +30,8 @@ public:
 
     int shard_count() const;
     std::shared_ptr<IndexShard> shard(int shard_id) const;
+    
+    void set_shard(int shard_id, std::shared_ptr<IndexShard> shard);
 
 private:
     std::string name_;

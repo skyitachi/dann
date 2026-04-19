@@ -52,11 +52,17 @@ namespace dann {
                                                                               nodes_(std::move(nodes)),
                                                                               is_trained_(false) {
         assert(shard_counts_ >= nodes.size() && shard_counts_ > 0);
-        // 将shards均分到nodes上
         int node_size = nodes_.size();
         for (int i = 0; i < shard_counts_; i++) {
             shards_[i] = std::make_unique<IndexIVFShard>(d, i, nodes_[i % node_size]);
         }
+    }
+
+    DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int total_shards, int shard_id, std::string node_id):
+        name_(std::move(name)), dimension_(d), shard_counts_(total_shards), 
+        current_shard_id_(shard_id), is_shard_mode_(true), is_trained_(false) {
+        nodes_.push_back(node_id);
+        shards_[shard_id] = std::make_unique<IndexIVFShard>(d, shard_id, node_id);
     }
 
     DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int shards, int nlist, int nprobe,
@@ -559,6 +565,63 @@ namespace dann {
         std::unique_lock<std::shared_mutex> lock(rw_mutex_);
         build_index(vectors, ids);
         dirty_.store(true);
+        return true;
+    }
+    
+    size_t DistributedIndexIVF::size() {
+        size_t total = 0;
+        for (const auto& [shard_id, shard] : shards_) {
+            total += shard->total_vectors();
+        }
+        return total;
+    }
+    
+    bool DistributedIndexIVF::load_shard_only(const std::string& base_path, int shard_id) {
+        std::unique_lock<std::shared_mutex> lock(rw_mutex_);
+        
+        IndexPersistenceMetadata meta;
+        Status s = LoadMetadata(base_path, &meta);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to load metadata: %s", s.ToString().c_str());
+            return false;
+        }
+        
+        if (shard_id < 0 || shard_id >= meta.shard_count) {
+            LOG_ERRORF("Invalid shard_id %d, must be in [0, %d)", shard_id, meta.shard_count);
+            return false;
+        }
+        
+        shard_counts_ = meta.shard_count;
+        nlist_ = meta.nlist;
+        nprobe_ = meta.nprobe;
+        current_shard_id_ = shard_id;
+        
+        s = LoadCentroids(base_path);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to load centroids: %s", s.ToString().c_str());
+            return false;
+        }
+        
+        std::string shards_dir = base_path + "/" + name_ + ".shards";
+        std::string shard_path = shards_dir + "/shard_" + std::to_string(shard_id) + ".posting";
+        
+        if (!std::filesystem::exists(shard_path)) {
+            LOG_ERRORF("Shard file does not exist: %s", shard_path.c_str());
+            return false;
+        }
+        
+        if (shards_.find(shard_id) == shards_.end()) {
+            shards_[shard_id] = std::make_unique<IndexIVFShard>(dimension_, shard_id, nodes_[0]);
+        }
+        
+        s = shards_[shard_id]->Load(shard_path);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to load shard %d: %s", shard_id, s.ToString().c_str());
+            return false;
+        }
+        
+        dirty_.store(false);
+        LOG_INFOF("Successfully loaded shard %d from %s", shard_id, shard_path.c_str());
         return true;
     }
 }

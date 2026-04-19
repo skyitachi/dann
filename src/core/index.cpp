@@ -140,4 +140,14 @@ std::shared_ptr<IndexShard> Index::shard(int shard_id) const {
     return shards_[static_cast<size_t>(shard_id)];
 }
 
+void Index::set_shard(int shard_id, std::shared_ptr<IndexShard> shard) {
+    if (shard_id < 0) {
+        return;
+    }
+    if (shard_id >= static_cast<int>(shards_.size())) {
+        shards_.resize(static_cast<size_t>(shard_id) + 1);
+    }
+    shards_[static_cast<size_t>(shard_id)] = std::move(shard);
+}
+
 } // namespace dann

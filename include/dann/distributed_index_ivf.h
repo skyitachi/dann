@@ -41,16 +41,24 @@ public:
     DistributedIndexIVF(std::string name, std::string node_id, std::shared_ptr<MetaDataStorage> meta_data_storage);
     DistributedIndexIVF(std::string name, int d, int shards, std::vector<std::string> nodes);
     DistributedIndexIVF(std::string name, int d, int shards, int nlist, int nprobe, std::vector<std::string> nodes);
+    
+    DistributedIndexIVF(std::string name, int d, int total_shards, int shard_id, std::string node_id);
+    
     bool add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids) override;
     void build_index(const std::vector<float>& vectors, const std::vector<int64_t>& ids);
     std::vector<InternalSearchResult> search(const std::vector<float>& query, int k) override;
     std::string index_type() const override;
-    size_t size() override { return 0; }
+    size_t size() override;
     int dimension() const override;
     bool load_index(const std::string &index_path) override;
     bool save_index(const std::string &index_path);
     bool is_dirty() const { return dirty_.load(); }
     void set_dirty(bool dirty) { dirty_.store(dirty); }
+    
+    bool load_shard_only(const std::string& base_path, int shard_id);
+    int total_shards() const { return shard_counts_; }
+    int current_shard_id() const { return current_shard_id_; }
+    
     ~DistributedIndexIVF() = default;
 
 private:
@@ -69,6 +77,8 @@ private:
     bool is_trained_;
     int64_t ntotal_;
     int shard_counts_;
+    int current_shard_id_{-1};
+    bool is_shard_mode_{false};
     int nlist_{-1};
     int nprobe_;
     std::atomic<bool> dirty_{false};
