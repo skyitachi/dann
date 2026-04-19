@@ -1,5 +1,7 @@
 #include "dann/vector_index.h"
 #include "dann/index.h"
+#include "dann/index_persistence_manager.h"
+#include "dann/distributed_index_ivf.h"
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -7,6 +9,7 @@
 #include <random>
 #include <filesystem>
 #include <cstdlib>
+#include <signal.h>
 
 #ifdef HAVE_GRPC
 #include "dann/rpc_server.h"
@@ -15,6 +18,17 @@
 
 using namespace dann;
 namespace fs = std::filesystem;
+
+std::unique_ptr<IndexPersistenceManager> g_persistence_manager;
+std::shared_ptr<Index> g_index;
+
+void signal_handler(int signal) {
+    std::cout << "\nReceived signal " << signal << ", shutting down...\n";
+    if (g_persistence_manager) {
+        g_persistence_manager->stop();
+    }
+    exit(0);
+}
 
 void print_usage() {
     std::cout << "DANN - Distributed Approximate Nearest Neighbors\n";
@@ -31,6 +45,9 @@ void print_usage() {
     std::cout << "  --shards <shards>     Number of shards (default: 1)\n";
     std::cout << "  --index <index>       faiss index file\n";
     std::cout << "  --seed-nodes <nodes>  Comma-separated list of seed nodes\n";
+    std::cout << "  --persistence-path <path>  Persistence storage path (default: ./data)\n";
+    std::cout << "  --persistence-interval <sec>  Auto-save interval in seconds (default: 60)\n";
+    std::cout << "  --no-persistence      Disable persistence\n";
     std::cout << "  --help                Show this help message\n";
 }
 
@@ -48,6 +65,9 @@ struct Config {
     std::vector<std::string> seed_nodes;
     int hnsw_m = 16;
     int hnsw_ef_construction = 100;
+    bool persistence_enabled = true;
+    int persistence_interval = 60;
+    std::string persistence_path = "./data";
 };
 
 std::string to_absolute_path(const std::string& path) {
@@ -104,6 +124,12 @@ Config parse_arguments(int argc, char* argv[]) {
             if (!seeds.empty()) {
                 config.seed_nodes.push_back(seeds);
             }
+        } else if (arg == "--persistence-path" && i + 1 < argc) {
+            config.persistence_path = argv[++i];
+        } else if (arg == "--persistence-interval" && i + 1 < argc) {
+            config.persistence_interval = std::stoi(argv[++i]);
+        } else if (arg == "--no-persistence") {
+            config.persistence_enabled = false;
         }
     }
     
@@ -131,17 +157,39 @@ void run_demo(const Config& config) {
     std::cout << "  Dimension: " << config.dimension << "\n";
     std::cout << "  Index Type: " << config.index_type << "\n";
     std::cout << "  Shards: " << config.shard_count << "\n";
+    std::cout << "  Persistence: " << (config.persistence_enabled ? "enabled" : "disabled") << "\n";
+    if (config.persistence_enabled) {
+        std::cout << "  Persistence Path: " << config.persistence_path << "\n";
+        std::cout << "  Persistence Interval: " << config.persistence_interval << "s\n";
+    }
     std::cout << "\n";
     
-    // Create components
-    auto index = std::make_shared<Index>("default", 
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+    
+    g_index = std::make_shared<Index>("default", 
         config.dimension, config.shard_count, config.index_type, 
         config.hnsw_m, config.hnsw_ef_construction, config.seed_nodes);
 
     if (!config.index_path.empty()) {
-        // Currently only supported for single-shard setups.
-        if (index->shard_count() == 1) {
-            index->shard(0)->load_index(config.index_path);
+        if (g_index->shard_count() == 1) {
+            g_index->shard(0)->load_index(config.index_path);
+        }
+    }
+    
+    if (config.persistence_enabled && config.index_type == "IVF") {
+        auto ivf_shard = std::dynamic_pointer_cast<DistributedIndexIVF>(g_index->shard(0));
+        if (ivf_shard) {
+            PersistenceConfig persist_config(
+                config.persistence_enabled,
+                config.persistence_interval,
+                config.persistence_path
+            );
+            g_persistence_manager = std::make_unique<IndexPersistenceManager>(
+                ivf_shard.get(), persist_config
+            );
+            g_persistence_manager->start();
+            std::cout << "Persistence manager started\n";
         }
     }
     // auto node_manager = std::make_shared<NodeManager>(config.node_id, config.address, config.port);
@@ -152,7 +200,7 @@ void run_demo(const Config& config) {
 #ifdef HAVE_GRPC
     // Create and start gRPC server
     auto rpc_server = std::make_shared<RPCServer>(config.address, config.grpc_port);
-    auto search_service = std::make_unique<VectorSearchServiceImpl>(index);
+    auto search_service = std::make_unique<VectorSearchServiceImpl>(g_index);
     rpc_server->register_service(std::move(search_service));
     rpc_server->set_max_threads(8);
     
@@ -220,21 +268,19 @@ void run_demo(const Config& config) {
     // std::cout << "\nBulk load " << (load_result ? "succeeded" : "failed")
     //           << " in " << load_time.count() << " ms\n";
 
-    // Index information
     std::cout << "\n=== Index Information ===\n";
-    std::cout << "Index name: " << index->name() << "\n";
-    std::cout << "Index type: " << index->index_type() << "\n";
-    std::cout << "Index dimension: " << index->dimension() << "\n";
-    std::cout << "Index size: " << index->size() << " vectors\n";
-    std::cout << "Shard count: " << index->shard_count() << "\n";
+    std::cout << "Index name: " << g_index->name() << "\n";
+    std::cout << "Index type: " << g_index->index_type() << "\n";
+    std::cout << "Index dimension: " << g_index->dimension() << "\n";
+    std::cout << "Index size: " << g_index->size() << " vectors\n";
+    std::cout << "Shard count: " << g_index->shard_count() << "\n";
     
-    // Keep server running
     std::cout << "\nServer running. Press Enter to stop...\n";
     std::cin.get();
     
-    // Cleanup
-    // consistency_manager->stop_anti_entropy();
-    // node_manager->stop();
+    if (g_persistence_manager) {
+        g_persistence_manager->stop();
+    }
 #ifdef HAVE_GRPC
     // rpc_server->stop();
 #endif

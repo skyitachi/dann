@@ -2,12 +2,16 @@
 // Created by skyitachi on 2026/2/27.
 //
 
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <numeric>
 #include <random>
+#include <unistd.h>
 
 #include "dann/distributed_index_ivf.h"
 
@@ -94,11 +98,6 @@ namespace dann {
         return "IVF";
     }
 
-    bool DistributedIndexIVF::load_index(const std::string &index_path) {
-        return false;
-    };
-
-
     void DistributedIndexIVF::build_index(const std::vector<float> &vectors,
                                           const std::vector<int64_t> &ids) {
         assert(dimension_ != 0);
@@ -148,7 +147,7 @@ namespace dann {
         // 3) Build postings using pre-sized vectors to reduce reallocation/copies
         std::vector<InvertedList> postings(num_centroids);
         for (int64_t centroid = 0; centroid < num_centroids; ++centroid) {
-            const size_t c = static_cast<size_t>(centroid_counts[centroid]);
+            const auto c = static_cast<size_t>(centroid_counts[centroid]);
             postings[centroid].vectors.resize(c * static_cast<size_t>(dimension_));
             postings[centroid].vector_ids.resize(c);
         }
@@ -200,11 +199,6 @@ namespace dann {
         }
 
         is_trained_ = true;
-    }
-
-    bool DistributedIndexIVF::add_vectors(const std::vector<float> &vectors, const std::vector<int64_t> &ids) {
-        build_index(vectors, ids);
-        return true;
     }
 
     std::vector<InternalSearchResult> DistributedIndexIVF::search(const std::vector<float> &query, int k) {
@@ -340,5 +334,231 @@ namespace dann {
         }
 
         return r;
+    }
+
+    Status DistributedIndexIVF::SaveMetadata(const std::string& base_path) const {
+        IndexPersistenceMetadata meta;
+        meta.index_name = name_;
+        meta.dimension = dimension_;
+        meta.shard_count = shard_counts_;
+        meta.nlist = nlist_;
+        meta.nprobe = nprobe_;
+        meta.index_type = "IVF";
+
+        nlohmann::json j = meta;
+        std::string json_str = j.dump(2);
+
+        std::string meta_path = base_path + "/" + name_ + ".meta";
+        std::string tmp_path = meta_path + ".tmp";
+
+        FILE* fp = fopen(tmp_path.c_str(), "wb");
+        if (!fp) {
+            return Status::IOError("Failed to open metadata file for writing: " + tmp_path);
+        }
+
+        size_t written = fwrite(json_str.data(), 1, json_str.size(), fp);
+        if (written != json_str.size()) {
+            fclose(fp);
+            std::filesystem::remove(tmp_path);
+            return Status::IOError("Failed to write metadata file: " + tmp_path);
+        }
+
+        fflush(fp);
+        fsync(fileno(fp));
+        fclose(fp);
+
+        std::error_code ec;
+        std::filesystem::rename(tmp_path, meta_path, ec);
+        if (ec) {
+            std::filesystem::remove(tmp_path);
+            return Status::IOError("Failed to rename metadata file: " + tmp_path + " -> " + meta_path);
+        }
+
+        return Status::OK();
+    }
+
+    Status DistributedIndexIVF::LoadMetadata(const std::string& base_path, IndexPersistenceMetadata* meta) {
+        std::string meta_path = base_path + "/" + name_ + ".meta";
+
+        if (!std::filesystem::exists(meta_path)) {
+            return Status::NotExist("Metadata file does not exist: " + meta_path);
+        }
+
+        std::ifstream ifs(meta_path);
+        if (!ifs.is_open()) {
+            return Status::IOError("Failed to open metadata file for reading: " + meta_path);
+        }
+
+        std::string content((std::istreambuf_iterator<char>(ifs)),
+                            std::istreambuf_iterator<char>());
+        ifs.close();
+
+        try {
+            nlohmann::json j = nlohmann::json::parse(content);
+            *meta = j.get<IndexPersistenceMetadata>();
+        } catch (const nlohmann::json::exception& e) {
+            return Status::Corruption("Failed to parse metadata JSON: " + std::string(e.what()));
+        }
+
+        if (meta->dimension != dimension_) {
+            return Status::Corruption("Dimension mismatch in metadata: expected " + 
+                                      std::to_string(dimension_) + ", got " + 
+                                      std::to_string(meta->dimension));
+        }
+
+        return Status::OK();
+    }
+
+    Status DistributedIndexIVF::SaveCentroids(const std::string& base_path) const {
+        if (!main_index_storage_) {
+            return Status::InvalidArgument("Main index storage not initialized");
+        }
+
+        std::string centroids_path = base_path + "/" + name_ + ".centroids";
+        return main_index_storage_->Save(centroids_path);
+    }
+
+    Status DistributedIndexIVF::LoadCentroids(const std::string& base_path) {
+        std::string centroids_path = base_path + "/" + name_ + ".centroids";
+
+        if (!std::filesystem::exists(centroids_path)) {
+            return Status::NotExist("Centroids file does not exist: " + centroids_path);
+        }
+
+        if (!main_index_storage_) {
+            main_index_storage_ = std::make_unique<MainIndexStorage>();
+        }
+
+        Status s = main_index_storage_->Load(centroids_path);
+        if (!s.ok()) {
+            return s;
+        }
+
+        const auto& centroids = main_index_storage_->centroids();
+        global_centroids_ = centroids;
+        global_centroid_ids_.resize(main_index_storage_->total_centroids());
+        std::iota(global_centroid_ids_.begin(), global_centroid_ids_.end(), 0);
+
+        is_trained_ = true;
+        return Status::OK();
+    }
+
+    Status DistributedIndexIVF::SaveShards(const std::string& base_path) const {
+        std::string shards_dir = base_path + "/" + name_ + ".shards";
+
+        std::error_code ec;
+        if (!std::filesystem::exists(shards_dir)) {
+            if (!std::filesystem::create_directories(shards_dir, ec)) {
+                return Status::IOError("Failed to create shards directory: " + shards_dir);
+            }
+        }
+
+        for (const auto& [shard_id, shard] : shards_) {
+            std::string shard_path = shards_dir + "/shard_" + std::to_string(shard_id) + ".posting";
+            Status s = shard->Save(shard_path);
+            if (!s.ok()) {
+                return s;
+            }
+        }
+
+        return Status::OK();
+    }
+
+    Status DistributedIndexIVF::LoadShards(const std::string& base_path) {
+        std::string shards_dir = base_path + "/" + name_ + ".shards";
+
+        if (!std::filesystem::exists(shards_dir)) {
+            return Status::NotExist("Shards directory does not exist: " + shards_dir);
+        }
+
+        for (auto& [shard_id, shard] : shards_) {
+            std::string shard_path = shards_dir + "/shard_" + std::to_string(shard_id) + ".posting";
+
+            if (!std::filesystem::exists(shard_path)) {
+                continue;
+            }
+
+            Status s = shard->Load(shard_path);
+            if (!s.ok()) {
+                return s;
+            }
+        }
+
+        return Status::OK();
+    }
+
+    bool DistributedIndexIVF::save_index(const std::string& index_path) {
+        std::shared_lock<std::shared_mutex> lock(rw_mutex_);
+
+        std::error_code ec;
+        if (!std::filesystem::exists(index_path)) {
+            if (!std::filesystem::create_directories(index_path, ec)) {
+                LOG_ERRORF("Failed to create index directory: %s", index_path.c_str());
+                return false;
+            }
+        }
+
+        Status s = SaveMetadata(index_path);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to save metadata: %s", s.ToString().c_str());
+            return false;
+        }
+
+        s = SaveCentroids(index_path);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to save centroids: %s", s.ToString().c_str());
+            return false;
+        }
+
+        s = SaveShards(index_path);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to save shards: %s", s.ToString().c_str());
+            return false;
+        }
+
+        dirty_.store(false);
+        return true;
+    }
+
+    bool DistributedIndexIVF::load_index(const std::string& index_path) {
+        std::unique_lock<std::shared_mutex> lock(rw_mutex_);
+
+        IndexPersistenceMetadata meta;
+        Status s = LoadMetadata(index_path, &meta);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to load metadata: %s", s.ToString().c_str());
+            return false;
+        }
+
+        if (meta.shard_count != shard_counts_) {
+            LOG_ERRORF("Shard count mismatch: expected %d, got %d", 
+                       shard_counts_, meta.shard_count);
+            return false;
+        }
+
+        nlist_ = meta.nlist;
+        nprobe_ = meta.nprobe;
+
+        s = LoadCentroids(index_path);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to load centroids: %s", s.ToString().c_str());
+            return false;
+        }
+
+        s = LoadShards(index_path);
+        if (!s.ok()) {
+            LOG_ERRORF("Failed to load shards: %s", s.ToString().c_str());
+            return false;
+        }
+
+        dirty_.store(false);
+        return true;
+    }
+
+    bool DistributedIndexIVF::add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids) {
+        std::unique_lock<std::shared_mutex> lock(rw_mutex_);
+        build_index(vectors, ids);
+        dirty_.store(true);
+        return true;
     }
 }

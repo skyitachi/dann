@@ -107,6 +107,7 @@ set(CORE_SOURCES_MINIMAL
     src/core/index_factory.cpp
     src/core/io_thread_pool.cpp
     src/core/status.cpp
+    src/core/index_persistence_manager.cpp
 )
 
 # Create minimal core library for testing

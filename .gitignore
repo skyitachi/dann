@@ -233,3 +233,4 @@ index_cache/
 replication_logs/
 test_faiss
 test_faiss.cpp
+.opencode
