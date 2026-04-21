@@ -13,7 +13,9 @@
 
 #ifdef HAVE_GRPC
 #include "dann/rpc_server.h"
+#include "dann/rpc_client.h"
 #include "network/vector_search_service_impl.h"
+#include "network/gateway_search_service_impl.h"
 #endif
 
 using namespace dann;
@@ -40,6 +42,7 @@ void print_usage() {
     std::cout << "  --port <port>          Listen port (default: 8080)\n";
 #ifdef HAVE_GRPC
     std::cout << "  --grpc-port <port>     gRPC server port (default: 50051)\n";
+    std::cout << "  --shard-addresses <addrs>  Comma-separated shard addresses (e.g. localhost:50052,localhost:50053)\n";
 #endif
     std::cout << "  --dimension <dim>      Vector dimension (default: 128)\n";
     std::cout << "  --index-type <type>    Index type: Flat, IVF, HNSW (default: IVF)\n";
@@ -61,6 +64,7 @@ struct Config {
     int port = 8080;
 #ifdef HAVE_GRPC
     int grpc_port = 50051;
+    std::vector<std::string> shard_addresses;
 #endif
     int dimension = 128;
     std::string index_type = "IVF";
@@ -86,7 +90,6 @@ std::string to_absolute_path(const std::string& path) {
         return path;
     }
     
-    // Get current working directory
     fs::path current_dir = fs::current_path();
     fs::path absolute_path = current_dir / p;
     
@@ -113,6 +116,15 @@ Config parse_arguments(int argc, char* argv[]) {
 #ifdef HAVE_GRPC
         } else if (arg == "--grpc-port" && i + 1 < argc) {
             config.grpc_port = std::stoi(argv[++i]);
+        } else if (arg == "--shard-addresses" && i + 1 < argc) {
+            std::string addrs = argv[++i];
+            size_t pos = 0;
+            while ((pos = addrs.find(',')) != std::string::npos) {
+                std::string addr = addrs.substr(0, pos);
+                if (!addr.empty()) config.shard_addresses.push_back(addr);
+                addrs.erase(0, pos + 1);
+            }
+            if (!addrs.empty()) config.shard_addresses.push_back(addrs);
 #endif
         } else if (arg == "--dimension" && i + 1 < argc) {
             config.dimension = std::stoi(argv[++i]);
@@ -177,14 +189,7 @@ void generate_clustered_data(int n, int d, std::vector<float>& vectors, std::vec
     }
 }
 
-void run_master_node(const Config& config) {
-    std::cout << "=== Running as MASTER node ===\n";
-    std::cout << "  Node ID: " << config.node_id << "\n";
-    std::cout << "  Dimension: " << config.dimension << "\n";
-    std::cout << "  Shard count: " << config.shard_count << "\n";
-    std::cout << "  Num vectors: " << config.num_vectors << "\n";
-    std::cout << "  Persistence path: " << config.persistence_path << "\n\n";
-    
+void build_and_save_index(const Config& config) {
     std::vector<std::string> nodes;
     for (int i = 0; i < config.shard_count; ++i) {
         nodes.push_back("shard_" + std::to_string(i));
@@ -216,11 +221,89 @@ void run_master_node(const Config& config) {
     }
     
     std::cout << "Index saved successfully!\n";
-    std::cout << "\n=== Master node completed ===\n";
-    std::cout << "Shard files written to:\n";
     for (int i = 0; i < config.shard_count; ++i) {
         std::cout << "  " << config.persistence_path << "/distributed_index.shards/shard_" << i << ".posting\n";
     }
+}
+
+#ifdef HAVE_GRPC
+struct ShardAddress {
+    std::string host;
+    int port;
+};
+
+static std::vector<ShardAddress> parse_shard_addresses(const std::vector<std::string>& addresses) {
+    std::vector<ShardAddress> result;
+    for (const auto& addr : addresses) {
+        auto colon_pos = addr.rfind(':');
+        if (colon_pos == std::string::npos) {
+            std::cerr << "Invalid shard address format: " << addr << " (expected host:port)\n";
+            continue;
+        }
+        ShardAddress sa;
+        sa.host = addr.substr(0, colon_pos);
+        sa.port = std::stoi(addr.substr(colon_pos + 1));
+        result.push_back(sa);
+    }
+    return result;
+}
+#endif
+
+void run_master_node(const Config& config) {
+    std::cout << "=== Running as MASTER node (API Gateway) ===\n";
+    std::cout << "  Node ID: " << config.node_id << "\n";
+    std::cout << "  Dimension: " << config.dimension << "\n";
+    std::cout << "  Shard count: " << config.shard_count << "\n";
+
+#ifdef HAVE_GRPC
+    std::cout << "  gRPC Port: " << config.grpc_port << "\n";
+
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+
+    if (config.shard_addresses.empty()) {
+        std::cerr << "Error: No shard addresses provided. Use --shard-addresses host:port,host:port\n";
+        return;
+    }
+
+    auto shard_addrs = parse_shard_addresses(config.shard_addresses);
+    if (shard_addrs.empty()) {
+        std::cerr << "Error: No valid shard addresses\n";
+        return;
+    }
+
+    build_and_save_index(config);
+
+    auto gateway = std::make_unique<GatewaySearchServiceImpl>(
+        static_cast<int>(shard_addrs.size()), config.dimension);
+
+    for (size_t i = 0; i < shard_addrs.size(); ++i) {
+        gateway->add_shard(static_cast<int>(i), shard_addrs[i].host, shard_addrs[i].port);
+    }
+
+    std::cout << "Connecting to shard nodes...\n";
+    if (!gateway->connect_all_shards()) {
+        std::cerr << "Warning: Not all shards connected. Gateway will start but some requests may fail.\n";
+    }
+
+    auto rpc_server = std::make_shared<RPCServer>(config.address, config.grpc_port);
+    rpc_server->register_gateway_service(std::move(gateway));
+    rpc_server->set_max_threads(8);
+
+    if (!rpc_server->start()) {
+        std::cerr << "Failed to start gRPC server\n";
+        return;
+    }
+
+    std::cout << "Master gateway started on port " << config.grpc_port << "\n";
+    std::cout << "\n=== Master node ready ===\n";
+    std::cout << "Press Enter to stop...\n";
+    std::cin.get();
+
+    std::cout << "Master node stopped.\n";
+#else
+    std::cout << "Note: gRPC support not compiled in. Master gateway requires gRPC.\n";
+#endif
 }
 
 void run_shard_node(const Config& config) {
@@ -247,7 +330,8 @@ void run_shard_node(const Config& config) {
     }
     std::cout << "Shard loaded successfully!\n";
     std::cout << "Shard contains " << shard_index->size() << " vectors\n";
-    
+    std::cout << "Dimension: " << config.dimension << "\n";
+
     g_index = std::make_shared<Index>("distributed_index", config.dimension, 1, "IVF");
     g_index->set_shard(0, shard_index);
     

@@ -46,11 +46,17 @@ namespace dann {
         }
     }
 
-    DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int shards,
+DistributedIndexIVF::DistributedIndexIVF(std::string name, int d, int shards,
                                              std::vector<std::string> nodes): name_(std::move(name)), dimension_(d),
-                                                                              shard_counts_(shards),
-                                                                              nodes_(std::move(nodes)),
-                                                                              is_trained_(false) {
+                                                                      shard_counts_(shards),
+                                                                      nodes_(std::move(nodes)),
+                                                                      is_trained_(false) {
+        if (shard_counts_ <= 0) {
+            return;
+        }
+        if (nodes_.empty()) {
+            nodes_.push_back("default_node");
+        }
         assert(shard_counts_ >= nodes.size() && shard_counts_ > 0);
         int node_size = nodes_.size();
         for (int i = 0; i < shard_counts_; i++) {

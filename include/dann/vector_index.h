@@ -27,8 +27,8 @@ public:
     std::vector<InternalSearchResult> search(const std::vector<float>& query, int k = 10) override;
     std::vector<InternalSearchResult> search_batch(const std::vector<float>& queries, int k = 10);
     
-    bool remove_vector(int64_t id);
-    bool update_vector(int64_t id, const std::vector<float>& new_vector);
+    bool remove_vector(int64_t id) override;
+    bool update_vector(int64_t id, const std::vector<float>& new_vector) override;
     
     // Index management
     bool save_index(const std::string& file_path);

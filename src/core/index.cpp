@@ -110,6 +110,34 @@ std::vector<InternalSearchResult> Index::search(const std::vector<float>& query,
     return merged;
 }
 
+bool Index::remove_vector(int64_t id) {
+    if (shards_.empty()) {
+        return false;
+    }
+    if (shards_.size() == 1) {
+        return shards_[0]->remove_vector(id);
+    }
+    int sid = shard_id_for_document(id);
+    if (sid < 0 || sid >= static_cast<int>(shards_.size())) {
+        return false;
+    }
+    return shards_[static_cast<size_t>(sid)]->remove_vector(id);
+}
+
+bool Index::update_vector(int64_t id, const std::vector<float>& new_vector) {
+    if (shards_.empty()) {
+        return false;
+    }
+    if (shards_.size() == 1) {
+        return shards_[0]->update_vector(id, new_vector);
+    }
+    int sid = shard_id_for_document(id);
+    if (sid < 0 || sid >= static_cast<int>(shards_.size())) {
+        return false;
+    }
+    return shards_[static_cast<size_t>(sid)]->update_vector(id, new_vector);
+}
+
 size_t Index::size() const {
     size_t total = 0;
     for (const auto& shard : shards_) {

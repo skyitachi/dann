@@ -148,10 +148,11 @@ endif()
 # Network layer sources
 set(NETWORK_SOURCES
     src/network/rpc_server.cpp
-#    src/network/rpc_client.cpp
-#    src/network/message_handler.cpp
+    src/network/rpc_client.cpp
     src/network/vector_search_service_impl.h
     src/network/vector_search_service_impl.cpp
+    src/network/gateway_search_service_impl.h
+    src/network/gateway_search_service_impl.cpp
 )
 
 # Utils sources
@@ -192,9 +193,16 @@ message(STATUS "Apache Arrow and Parquet support disabled")
 
 
 # Skip gRPC and protobuf for now to focus on benchmarks
-message(STATUS "Skipping gRPC/protobuf search for benchmark build")
-set(gRPC_FOUND FALSE)
-set(Protobuf_FOUND FALSE)
+# message(STATUS "Skipping gRPC/protobuf search for benchmark build")
+# set(gRPC_FOUND FALSE)
+# set(Protobuf_FOUND FALSE)
+
+find_package(gRPC QUIET CONFIG)
+
+if(gRPC_FOUND)
+    message(STATUS "Building with gRPC support (vcpkg/system)")
+    set(GRPC_FOUND_SYSTEM TRUE)
+endif()
 
 # Approach 2: Try Homebrew with explicit paths (if pkg-config failed)
 if(NOT gRPC_FOUND AND EXISTS "/opt/homebrew")

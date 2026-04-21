@@ -23,6 +23,8 @@ public:
 
     bool add_vectors(const std::vector<float>& vectors, const std::vector<int64_t>& ids);
     std::vector<InternalSearchResult> search(const std::vector<float>& query, int k = 10);
+    bool remove_vector(int64_t id);
+    bool update_vector(int64_t id, const std::vector<float>& new_vector);
 
     size_t size() const;
     int dimension() const;

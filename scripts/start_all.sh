@@ -8,83 +8,98 @@ DATA_DIR="${PROJECT_DIR}/data/distributed_index"
 LOG_DIR="${PROJECT_DIR}/logs"
 PID_DIR="${PROJECT_DIR}/.pids"
 
-echo "=== Starting 3-Node DANN Distributed System ==="
+SHARD_COUNT=2
+MASTER_GRPC_PORT=50051
+
+SHARD_ADDRESSES=""
+for ((i=0; i<SHARD_COUNT; i++)); do
+    PORT=$((50052 + i))
+    if [ -n "$SHARD_ADDRESSES" ]; then
+        SHARD_ADDRESSES="${SHARD_ADDRESSES},"
+    fi
+    SHARD_ADDRESSES="${SHARD_ADDRESSES}localhost:${PORT}"
+done
+
+echo "=== Starting DANN Distributed System ==="
 echo ""
 echo "This will:"
-echo "  1. Run master node to build and save index"
-echo "  2. Start shard 0 node on port 50052"
-echo "  3. Start shard 1 node on port 50053"
+echo "  1. Start shard 0 node on port 50052"
+echo "  2. Start shard 1 node on port 50053"
+echo "  3. Start master gateway node on port 50051"
 echo ""
 
-# Clean up and create directories
 rm -rf "${DATA_DIR}"
 mkdir -p "${DATA_DIR}"
 mkdir -p "${LOG_DIR}"
 mkdir -p "${PID_DIR}"
 
-# Clean up existing processes if any
-if [ -f "${PID_DIR}/shard_0.pid" ]; then
-    kill $(cat "${PID_DIR}/shard_0.pid") 2>/dev/null || true
+if [ -f "${PID_DIR}/master.pid" ]; then
+    kill $(cat "${PID_DIR}/master.pid") 2>/dev/null || true
 fi
-if [ -f "${PID_DIR}/shard_1.pid" ]; then
-    kill $(cat "${PID_DIR}/shard_1.pid") 2>/dev/null || true
-fi
+for ((i=0; i<SHARD_COUNT; i++)); do
+    if [ -f "${PID_DIR}/shard_${i}.pid" ]; then
+        kill $(cat "${PID_DIR}/shard_${i}.pid") 2>/dev/null || true
+    fi
+done
 
 cd "${BUILD_DIR}"
 
-echo "=== Step 1: Running Master Node (build & save) ==="
-echo ""
-
+echo "=== Step 1: Building index (master build-only phase) ==="
 ./dann_server \
     --role master \
     --node-id master \
     --dimension 128 \
-    --shards 2 \
+    --shards ${SHARD_COUNT} \
     --num-vectors 10000 \
     --persistence-path "${DATA_DIR}"
 
 echo ""
-echo "=== Master completed. Starting shard nodes in background ==="
+echo "=== Step 2: Starting shard nodes in background ==="
 echo ""
 
-# Start shard 0
-nohup ./dann_server \
-    --role shard \
-    --node-id shard_0 \
-    --shard-id 0 \
-    --shards 2 \
-    --dimension 128 \
-    --grpc-port 50052 \
-    --persistence-path "${DATA_DIR}" \
-    > "${LOG_DIR}/shard_0.log" 2>&1 &
-SHARD0_PID=$!
-echo $SHARD0_PID > "${PID_DIR}/shard_0.pid"
-echo "Shard 0 started (PID: $SHARD0_PID), logs: ${LOG_DIR}/shard_0.log"
+for ((i=0; i<SHARD_COUNT; i++)); do
+    PORT=$((50052 + i))
+    NODE_ID="shard_${i}"
+    nohup ./dann_server \
+        --role shard \
+        --node-id "${NODE_ID}" \
+        --shard-id ${i} \
+        --shards ${SHARD_COUNT} \
+        --dimension 128 \
+        --grpc-port ${PORT} \
+        --persistence-path "${DATA_DIR}" \
+        > "${LOG_DIR}/shard_${i}.log" 2>&1 &
+    PID=$!
+    echo $PID > "${PID_DIR}/shard_${i}.pid"
+    echo "Shard ${i} started (PID: ${PID}), port: ${PORT}, logs: ${LOG_DIR}/shard_${i}.log"
+    sleep 1
+done
 
-sleep 1
+echo ""
+echo "=== Step 3: Starting master gateway node in background ==="
+echo ""
 
-# Start shard 1
 nohup ./dann_server \
-    --role shard \
-    --node-id shard_1 \
-    --shard-id 1 \
-    --shards 2 \
+    --role master \
+    --node-id master \
     --dimension 128 \
-    --grpc-port 50053 \
+    --shards ${SHARD_COUNT} \
+    --grpc-port ${MASTER_GRPC_PORT} \
+    --shard-addresses "${SHARD_ADDRESSES}" \
     --persistence-path "${DATA_DIR}" \
-    > "${LOG_DIR}/shard_1.log" 2>&1 &
-SHARD1_PID=$!
-echo $SHARD1_PID > "${PID_DIR}/shard_1.pid"
-echo "Shard 1 started (PID: $SHARD1_PID), logs: ${LOG_DIR}/shard_1.log"
+    > "${LOG_DIR}/master.log" 2>&1 &
+MASTER_PID=$!
+echo $MASTER_PID > "${PID_DIR}/master.pid"
+echo "Master gateway started (PID: ${MASTER_PID}), port: ${MASTER_GRPC_PORT}, logs: ${LOG_DIR}/master.log"
 
 echo ""
 echo "=== Distributed System Started ==="
-echo "Shard 0: localhost:50052"
-echo "Shard 1: localhost:50053"
+echo "Master gateway: localhost:${MASTER_GRPC_PORT}"
+for ((i=0; i<SHARD_COUNT; i++)); do
+    PORT=$((50052 + i))
+    echo "Shard ${i}: localhost:${PORT}"
+done
 echo ""
-echo "Log files:"
-echo "  ${LOG_DIR}/shard_0.log"
-echo "  ${LOG_DIR}/shard_1.log"
-echo ""
-echo "To view logs: tail -f ${LOG_DIR}/shard_*.log"
+echo "To query, connect to master at localhost:${MASTER_GRPC_PORT}"
+echo "To view logs: tail -f ${LOG_DIR}/*.log"
 echo "To stop: ${SCRIPT_DIR}/stop_all.sh"

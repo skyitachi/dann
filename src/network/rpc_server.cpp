@@ -88,33 +88,33 @@ void RPCServer::reset_metrics() {
     metrics_.active_connections = 0;
 }
 
+void RPCServer::register_gateway_service(std::unique_ptr<dann::VectorSearchService::Service> service) {
+    gateway_service_ = std::move(service);
+}
+
 void RPCServer::setup_grpc_server() {
     grpc::ServerBuilder builder;
-    
-    // Listen on the given address
+
     std::string server_address = address_ + ":" + std::to_string(port_);
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    
-    // Set max message size
-    builder.SetMaxReceiveMessageSize(100 * 1024 * 1024); // 100MB
-    builder.SetMaxSendMessageSize(100 * 1024 * 1024);    // 100MB
-    
-    // Set max threads
+
+    builder.SetMaxReceiveMessageSize(100 * 1024 * 1024);
+    builder.SetMaxSendMessageSize(100 * 1024 * 1024);
+
     builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_threads_);
-    
-    // Register the service if available
-    if (search_service_) {
-        // Cast to the actual implementation and register
+
+    if (gateway_service_) {
+        builder.RegisterService(gateway_service_.get());
+    } else if (search_service_) {
         auto* service_impl = static_cast<VectorSearchServiceImpl*>(search_service_.get());
         builder.RegisterService(service_impl);
     }
-    
-    // Build and start server
+
     server_ = builder.BuildAndStart();
     if (!server_) {
         throw std::runtime_error("Failed to start gRPC server");
     }
-    
+
     std::cout << "gRPC server listening on " << server_address << std::endl;
 }
 
