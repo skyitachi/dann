@@ -2,6 +2,7 @@
 #include "dann/index.h"
 #include "dann/index_persistence_manager.h"
 #include "dann/distributed_index_ivf.h"
+#include "dann/logger.h"
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -25,7 +26,7 @@ std::unique_ptr<IndexPersistenceManager> g_persistence_manager;
 std::shared_ptr<Index> g_index;
 
 void signal_handler(int signal) {
-    std::cout << "\nReceived signal " << signal << ", shutting down...\n";
+    LOG_INFO("Received signal " + std::to_string(signal) + ", shutting down...");
     if (g_persistence_manager) {
         g_persistence_manager->stop();
     }
@@ -33,28 +34,28 @@ void signal_handler(int signal) {
 }
 
 void print_usage() {
-    std::cout << "DANN - Distributed Approximate Nearest Neighbors\n";
-    std::cout << "Usage: dann_server [options]\n";
-    std::cout << "Options:\n";
-    std::cout << "  --role <role>          Node role: master, shard, standalone (default: standalone)\n";
-    std::cout << "  --node-id <id>         Node identifier (default: node1)\n";
-    std::cout << "  --address <addr>       Listen address (default: 0.0.0.0)\n";
-    std::cout << "  --port <port>          Listen port (default: 8080)\n";
+    LOG_INFO("DANN - Distributed Approximate Nearest Neighbors");
+    LOG_INFO("Usage: dann_server [options]");
+    LOG_INFO("Options:");
+    LOG_INFO("  --role <role>          Node role: master, shard, standalone (default: standalone)");
+    LOG_INFO("  --node-id <id>         Node identifier (default: node1)");
+    LOG_INFO("  --address <addr>       Listen address (default: 0.0.0.0)");
+    LOG_INFO("  --port <port>          Listen port (default: 8080)");
 #ifdef HAVE_GRPC
-    std::cout << "  --grpc-port <port>     gRPC server port (default: 50051)\n";
-    std::cout << "  --shard-addresses <addrs>  Comma-separated shard addresses (e.g. localhost:50052,localhost:50053)\n";
+    LOG_INFO("  --grpc-port <port>     gRPC server port (default: 50051)");
+    LOG_INFO("  --shard-addresses <addrs>  Comma-separated shard addresses (e.g. localhost:50052,localhost:50053)");
 #endif
-    std::cout << "  --dimension <dim>      Vector dimension (default: 128)\n";
-    std::cout << "  --index-type <type>    Index type: Flat, IVF, HNSW (default: IVF)\n";
-    std::cout << "  --shards <shards>      Number of shards (default: 1)\n";
-    std::cout << "  --shard-id <id>        Shard ID for shard role (default: 0)\n";
-    std::cout << "  --index <index>        faiss index file\n";
-    std::cout << "  --seed-nodes <nodes>   Comma-separated list of seed nodes\n";
-    std::cout << "  --persistence-path <path>  Persistence storage path (default: ./data)\n";
-    std::cout << "  --persistence-interval <sec>  Auto-save interval in seconds (default: 60)\n";
-    std::cout << "  --no-persistence       Disable persistence\n";
-    std::cout << "  --num-vectors <n>      Number of vectors for master to generate (default: 10000)\n";
-    std::cout << "  --help                 Show this help message\n";
+    LOG_INFO("  --dimension <dim>      Vector dimension (default: 128)");
+    LOG_INFO("  --index-type <type>    Index type: Flat, IVF, HNSW (default: IVF)");
+    LOG_INFO("  --shards <shards>      Number of shards (default: 1)");
+    LOG_INFO("  --shard-id <id>        Shard ID for shard role (default: 0)");
+    LOG_INFO("  --index <index>        faiss index file");
+    LOG_INFO("  --seed-nodes <nodes>   Comma-separated list of seed nodes");
+    LOG_INFO("  --persistence-path <path>  Persistence storage path (default: ./data)");
+    LOG_INFO("  --persistence-interval <sec>  Auto-save interval in seconds (default: 60)");
+    LOG_INFO("  --no-persistence       Disable persistence");
+    LOG_INFO("  --num-vectors <n>      Number of vectors for master to generate (default: 10000)");
+    LOG_INFO("  --help                 Show this help message");
 }
 
 struct Config {
@@ -198,31 +199,31 @@ void build_and_save_index(const Config& config) {
     auto distributed_index = std::make_unique<DistributedIndexIVF>(
         "distributed_index", config.dimension, config.shard_count, nodes);
     
-    std::cout << "Generating " << config.num_vectors << " vectors...\n";
+    LOG_INFO("Generating " + std::to_string(config.num_vectors) + " vectors...");
     std::vector<float> vectors;
     std::vector<int64_t> ids;
     auto gen_start = std::chrono::high_resolution_clock::now();
     generate_clustered_data(config.num_vectors, config.dimension, vectors, ids);
     auto gen_end = std::chrono::high_resolution_clock::now();
     auto gen_time = std::chrono::duration_cast<std::chrono::milliseconds>(gen_end - gen_start);
-    std::cout << "Data generation completed in " << gen_time.count() << " ms\n";
+    LOG_INFO("Data generation completed in " + std::to_string(gen_time.count()) + " ms");
     
-    std::cout << "Building index...\n";
+    LOG_INFO("Building index...");
     auto build_start = std::chrono::high_resolution_clock::now();
     distributed_index->add_vectors(vectors, ids);
     auto build_end = std::chrono::high_resolution_clock::now();
     auto build_time = std::chrono::duration_cast<std::chrono::milliseconds>(build_end - build_start);
-    std::cout << "Index build completed in " << build_time.count() << " ms\n";
+    LOG_INFO("Index build completed in " + std::to_string(build_time.count()) + " ms");
     
-    std::cout << "Saving index to " << config.persistence_path << "...\n";
+    LOG_INFO("Saving index to " + config.persistence_path + "...");
     if (!distributed_index->save_index(config.persistence_path)) {
-        std::cerr << "Failed to save index\n";
+        LOG_ERROR("Failed to save index");
         return;
     }
     
-    std::cout << "Index saved successfully!\n";
+    LOG_INFO("Index saved successfully!");
     for (int i = 0; i < config.shard_count; ++i) {
-        std::cout << "  " << config.persistence_path << "/distributed_index.shards/shard_" << i << ".posting\n";
+        LOG_INFO("  " + config.persistence_path + "/distributed_index.shards/shard_" + std::to_string(i) + ".posting");
     }
 }
 
@@ -237,7 +238,7 @@ static std::vector<ShardAddress> parse_shard_addresses(const std::vector<std::st
     for (const auto& addr : addresses) {
         auto colon_pos = addr.rfind(':');
         if (colon_pos == std::string::npos) {
-            std::cerr << "Invalid shard address format: " << addr << " (expected host:port)\n";
+            LOG_ERROR("Invalid shard address format: " + addr + " (expected host:port)");
             continue;
         }
         ShardAddress sa;
@@ -250,25 +251,25 @@ static std::vector<ShardAddress> parse_shard_addresses(const std::vector<std::st
 #endif
 
 void run_master_node(const Config& config) {
-    std::cout << "=== Running as MASTER node (API Gateway) ===\n";
-    std::cout << "  Node ID: " << config.node_id << "\n";
-    std::cout << "  Dimension: " << config.dimension << "\n";
-    std::cout << "  Shard count: " << config.shard_count << "\n";
+    LOG_INFO("=== Running as MASTER node (API Gateway) ===");
+    LOG_INFO("  Node ID: " + config.node_id);
+    LOG_INFO("  Dimension: " + std::to_string(config.dimension));
+    LOG_INFO("  Shard count: " + std::to_string(config.shard_count));
 
 #ifdef HAVE_GRPC
-    std::cout << "  gRPC Port: " << config.grpc_port << "\n";
+    LOG_INFO("  gRPC Port: " + std::to_string(config.grpc_port));
 
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
     if (config.shard_addresses.empty()) {
-        std::cerr << "Error: No shard addresses provided. Use --shard-addresses host:port,host:port\n";
+        LOG_ERROR("Error: No shard addresses provided. Use --shard-addresses host:port,host:port");
         return;
     }
 
     auto shard_addrs = parse_shard_addresses(config.shard_addresses);
     if (shard_addrs.empty()) {
-        std::cerr << "Error: No valid shard addresses\n";
+        LOG_ERROR("Error: No valid shard addresses");
         return;
     }
 
@@ -281,9 +282,9 @@ void run_master_node(const Config& config) {
         gateway->add_shard(static_cast<int>(i), shard_addrs[i].host, shard_addrs[i].port);
     }
 
-    std::cout << "Connecting to shard nodes...\n";
+    LOG_INFO("Connecting to shard nodes...");
     if (!gateway->connect_all_shards()) {
-        std::cerr << "Warning: Not all shards connected. Gateway will start but some requests may fail.\n";
+        LOG_WARN("Warning: Not all shards connected. Gateway will start but some requests may fail.");
     }
 
     auto rpc_server = std::make_shared<RPCServer>(config.address, config.grpc_port);
@@ -291,31 +292,31 @@ void run_master_node(const Config& config) {
     rpc_server->set_max_threads(8);
 
     if (!rpc_server->start()) {
-        std::cerr << "Failed to start gRPC server\n";
+        LOG_ERROR("Failed to start gRPC server");
         return;
     }
 
-    std::cout << "Master gateway started on port " << config.grpc_port << "\n";
-    std::cout << "\n=== Master node ready ===\n";
-    std::cout << "Press Enter to stop...\n";
+    LOG_INFO("Master gateway started on port " + std::to_string(config.grpc_port));
+    LOG_INFO("=== Master node ready ===");
+    LOG_INFO("Press Enter to stop...");
     std::cin.get();
 
-    std::cout << "Master node stopped.\n";
+    LOG_INFO("Master node stopped.");
 #else
-    std::cout << "Note: gRPC support not compiled in. Master gateway requires gRPC.\n";
+    LOG_INFO("Note: gRPC support not compiled in. Master gateway requires gRPC.");
 #endif
 }
 
 void run_shard_node(const Config& config) {
-    std::cout << "=== Running as SHARD node ===\n";
-    std::cout << "  Node ID: " << config.node_id << "\n";
-    std::cout << "  Shard ID: " << config.shard_id << "\n";
-    std::cout << "  Total Shards: " << config.shard_count << "\n";
-    std::cout << "  Dimension: " << config.dimension << "\n";
+    LOG_INFO("=== Running as SHARD node ===");
+    LOG_INFO("  Node ID: " + config.node_id);
+    LOG_INFO("  Shard ID: " + std::to_string(config.shard_id));
+    LOG_INFO("  Total Shards: " + std::to_string(config.shard_count));
+    LOG_INFO("  Dimension: " + std::to_string(config.dimension));
 #ifdef HAVE_GRPC
-    std::cout << "  gRPC Port: " << config.grpc_port << "\n";
+    LOG_INFO("  gRPC Port: " + std::to_string(config.grpc_port));
 #endif
-    std::cout << "  Persistence path: " << config.persistence_path << "\n\n";
+    LOG_INFO("  Persistence path: " + config.persistence_path + "\n");
     
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
@@ -323,14 +324,14 @@ void run_shard_node(const Config& config) {
     auto shard_index = std::make_shared<DistributedIndexIVF>(
         "distributed_index", config.dimension, config.shard_count, config.shard_id, config.node_id);
     
-    std::cout << "Loading shard " << config.shard_id << " from " << config.persistence_path << "...\n";
+    LOG_INFO("Loading shard " + std::to_string(config.shard_id) + " from " + config.persistence_path + "...");
     if (!shard_index->load_shard_only(config.persistence_path, config.shard_id)) {
-        std::cerr << "Failed to load shard " << config.shard_id << "\n";
+        LOG_ERROR("Failed to load shard " + std::to_string(config.shard_id));
         return;
     }
-    std::cout << "Shard loaded successfully!\n";
-    std::cout << "Shard contains " << shard_index->size() << " vectors\n";
-    std::cout << "Dimension: " << config.dimension << "\n";
+    LOG_INFO("Shard loaded successfully!");
+    LOG_INFO("Shard contains " + std::to_string(shard_index->size()) + " vectors");
+    LOG_INFO("Dimension: " + std::to_string(config.dimension));
 
     g_index = std::make_shared<Index>("distributed_index", config.dimension, 1, "IVF");
     g_index->set_shard(0, shard_index);
@@ -342,39 +343,39 @@ void run_shard_node(const Config& config) {
     rpc_server->set_max_threads(8);
     
     if (!rpc_server->start()) {
-        std::cerr << "Failed to start gRPC server\n";
+        LOG_ERROR("Failed to start gRPC server");
         return;
     }
-    std::cout << "gRPC server started on port " << config.grpc_port << "\n";
+    LOG_INFO("gRPC server started on port " + std::to_string(config.grpc_port));
 #else
-    std::cout << "Note: gRPC support not compiled in\n";
+    LOG_INFO("Note: gRPC support not compiled in");
 #endif
     
-    std::cout << "\n=== Shard node ready ===\n";
-    std::cout << "Press Enter to stop...\n";
+    LOG_INFO("=== Shard node ready ===");
+    LOG_INFO("Press Enter to stop...");
     std::cin.get();
     
 #ifdef HAVE_GRPC
 #endif
-    std::cout << "Shard node stopped.\n";
+    LOG_INFO("Shard node stopped.");
 }
 
 void run_standalone_node(const Config& config) {
-    std::cout << "=== Running in STANDALONE mode ===\n";
-    std::cout << "  Node ID: " << config.node_id << "\n";
-    std::cout << "  Address: " << config.address << ":" << config.port << "\n";
+    LOG_INFO("=== Running in STANDALONE mode ===");
+    LOG_INFO("  Node ID: " + config.node_id);
+    LOG_INFO("  Address: " + config.address + ":" + std::to_string(config.port));
 #ifdef HAVE_GRPC
-    std::cout << "  gRPC Port: " << config.grpc_port << "\n";
+    LOG_INFO("  gRPC Port: " + std::to_string(config.grpc_port));
 #endif
-    std::cout << "  Dimension: " << config.dimension << "\n";
-    std::cout << "  Index Type: " << config.index_type << "\n";
-    std::cout << "  Shards: " << config.shard_count << "\n";
-    std::cout << "  Persistence: " << (config.persistence_enabled ? "enabled" : "disabled") << "\n";
+    LOG_INFO("  Dimension: " + std::to_string(config.dimension));
+    LOG_INFO("  Index Type: " + config.index_type);
+    LOG_INFO("  Shards: " + std::to_string(config.shard_count));
+    LOG_INFO("  Persistence: " + std::string(config.persistence_enabled ? "enabled" : "disabled"));
     if (config.persistence_enabled) {
-        std::cout << "  Persistence Path: " << config.persistence_path << "\n";
-        std::cout << "  Persistence Interval: " << config.persistence_interval << "s\n";
+        LOG_INFO("  Persistence Path: " + config.persistence_path);
+        LOG_INFO("  Persistence Interval: " + std::to_string(config.persistence_interval) + "s");
     }
-    std::cout << "\n";
+    LOG_INFO("");
     
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
@@ -401,7 +402,7 @@ void run_standalone_node(const Config& config) {
                 ivf_shard.get(), persist_config
             );
             g_persistence_manager->start();
-            std::cout << "Persistence manager started\n";
+            LOG_INFO("Persistence manager started");
         }
     }
     
@@ -412,23 +413,23 @@ void run_standalone_node(const Config& config) {
     rpc_server->set_max_threads(8);
     
     if (!rpc_server->start()) {
-        std::cerr << "Failed to start gRPC server\n";
+        LOG_ERROR("Failed to start gRPC server");
         return;
     }
     
-    std::cout << "gRPC server started on port " << config.grpc_port << "\n";
+    LOG_INFO("gRPC server started on port " + std::to_string(config.grpc_port));
 #else
-    std::cout << "Running without gRPC support\n";
+    LOG_INFO("Running without gRPC support");
 #endif
     
-    std::cout << "\n=== Index Information ===\n";
-    std::cout << "Index name: " << g_index->name() << "\n";
-    std::cout << "Index type: " << g_index->index_type() << "\n";
-    std::cout << "Index dimension: " << g_index->dimension() << "\n";
-    std::cout << "Index size: " << g_index->size() << " vectors\n";
-    std::cout << "Shard count: " << g_index->shard_count() << "\n";
+    LOG_INFO("=== Index Information ===");
+    LOG_INFO("Index name: " + g_index->name());
+    LOG_INFO("Index type: " + g_index->index_type());
+    LOG_INFO("Index dimension: " + std::to_string(g_index->dimension()));
+    LOG_INFO("Index size: " + std::to_string(g_index->size()) + " vectors");
+    LOG_INFO("Shard count: " + std::to_string(g_index->shard_count()));
     
-    std::cout << "\nServer running. Press Enter to stop...\n";
+    LOG_INFO("Server running. Press Enter to stop...");
     std::cin.get();
     
     if (g_persistence_manager) {
@@ -437,7 +438,7 @@ void run_standalone_node(const Config& config) {
 #ifdef HAVE_GRPC
 #endif
     
-    std::cout << "Server stopped.\n";
+    LOG_INFO("Server stopped.");
 }
 
 void run_demo(const Config& config) {
@@ -456,7 +457,7 @@ int main(int argc, char* argv[]) {
         run_demo(config);
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
+        LOG_ERROR("Error: " + std::string(e.what()));
         return 1;
     }
 }
